@@ -1,0 +1,9 @@
+{
+  "key.category.donutvision.tools": "DonutVision",
+  "key.donutvision.menu": "Open DonutVision Menu",
+  "key.donutvision.freecam": "Toggle Freecam",
+  "key.donutvision.esp": "Toggle Block ESP",
+  "key.donutvision.mode": "Cycle ESP Targets",
+  "key.donutvision.radius": "Cycle ESP Radius",
+  "key.donutvision.menu_backup": "Open DonutVision menu (backup)"
+}
