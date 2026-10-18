@@ -50,8 +50,8 @@ public final class Freecam {
         double angle = Math.toRadians(mc.player.getYRot());
         double sin = Math.sin(angle);
         double cos = Math.cos(angle);
-        double dx = -sin * forward + cos * strafe;
-        double dz = cos * forward + sin * strafe;
+        double dx = -sin * forward - cos * strafe;
+        double dz = cos * forward - sin * strafe;
         double length = Math.sqrt(dx * dx + dz * dz + rise * rise);
         if (length < 0.01) return;
 

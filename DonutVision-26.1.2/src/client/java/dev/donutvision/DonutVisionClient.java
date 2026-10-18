@@ -11,6 +11,7 @@ import net.minecraft.resources.Identifier;
 
 public final class DonutVisionClient implements ClientModInitializer {
     private static boolean espEnabled;
+    private static boolean blockTracers = true;
     private static KeyMapping freecamKey;
     private static KeyMapping espKey;
     private static KeyMapping modeKey;
@@ -26,6 +27,15 @@ public final class DonutVisionClient implements ClientModInitializer {
     public static void setEspEnabled(boolean enabled) {
         espEnabled = enabled;
         if (!enabled) BlockEsp.clear();
+    }
+
+    public static boolean blockTracers() { return blockTracers; }
+
+    public static void setBlockTracers(boolean enabled) { blockTracers = enabled; }
+
+    public static void toggleBlockTracers() {
+        blockTracers = !blockTracers;
+        ClientSettings.save();
     }
 
     public static void toggleEsp() {
@@ -53,9 +63,9 @@ public final class DonutVisionClient implements ClientModInitializer {
         backupMenuKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.donutvision.menu_backup", InputConstants.Type.KEYSYM, InputConstants.KEY_F10, category));
 
-        System.out.println("[DonutVision] 1.2.0 client initializer loaded. Menu keys: Right Shift or F10.");
+        System.out.println("[DonutVision] 1.3.0 client initializer loaded. Menu keys: Right Shift or F10.");
         ClientSettings.load();
-        BlockEsp.install();
+        EspOverlay.install();
         ClientTickEvents.END_CLIENT_TICK.register(this::tick);
     }
 
@@ -74,7 +84,7 @@ public final class DonutVisionClient implements ClientModInitializer {
         }
         if (!welcomeShown) {
             welcomeShown = true;
-            notify(mc, "Loaded! Menu: Right Shift or F10. Check Controls > Key Binds if neither works.");
+            notify(mc, "v1.3.0 loaded! RShift / F10 menu. Player ESP and X-ray tracers are in Modules.");
         }
         while (freecamKey.consumeClick()) {
             Freecam.toggle(mc);

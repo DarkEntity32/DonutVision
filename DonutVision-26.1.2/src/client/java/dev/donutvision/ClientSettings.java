@@ -21,6 +21,9 @@ public final class ClientSettings {
         try (InputStream input = Files.newInputStream(FILE)) {
             data.load(input);
             DonutVisionClient.setEspEnabled(Boolean.parseBoolean(data.getProperty("espEnabled", "false")));
+            DonutVisionClient.setBlockTracers(Boolean.parseBoolean(data.getProperty("blockTracers", "true")));
+            PlayerEsp.setEnabled(Boolean.parseBoolean(data.getProperty("playerEsp", "false")));
+            PlayerEsp.setTracers(Boolean.parseBoolean(data.getProperty("playerTracers", "true")));
             BlockEsp.setRadius(parseInt(data.getProperty("radius"), 12));
             BlockEsp.setMode(parseInt(data.getProperty("mode"), 0));
             Freecam.setSpeed(parseDouble(data.getProperty("speed"), 0.42));
@@ -35,6 +38,9 @@ public final class ClientSettings {
     public static void save() {
         Properties data = new Properties();
         data.setProperty("espEnabled", Boolean.toString(DonutVisionClient.espEnabled()));
+        data.setProperty("blockTracers", Boolean.toString(DonutVisionClient.blockTracers()));
+        data.setProperty("playerEsp", Boolean.toString(PlayerEsp.enabled()));
+        data.setProperty("playerTracers", Boolean.toString(PlayerEsp.tracers()));
         data.setProperty("radius", Integer.toString(BlockEsp.radius()));
         data.setProperty("mode", Integer.toString(BlockEsp.mode()));
         data.setProperty("speed", Double.toString(Freecam.speed()));

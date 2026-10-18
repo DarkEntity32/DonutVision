@@ -1,25 +1,18 @@
 package dev.donutvision;
 
-import com.mojang.blaze3d.vertex.PoseStack;
-import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
-import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
-import net.minecraft.client.renderer.rendertype.RenderTypes;
-import net.minecraft.client.renderer.ShapeRenderer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.phys.Vec3;
-import net.minecraft.world.phys.shapes.Shapes;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /** Renders color-coded wireframe outlines around blocks already in loaded client chunks. */
 public final class BlockEsp {
-    private record Target(BlockPos pos, int color) { }
+    record Target(BlockPos pos, int color) { }
 
     private static List<Target> matches = List.of();
     public enum Filter {
@@ -39,10 +32,6 @@ public final class BlockEsp {
     private static int ticks = 0;
 
     private BlockEsp() { }
-
-    public static void install() {
-        LevelRenderEvents.COLLECT_SUBMITS.register(BlockEsp::render);
-    }
 
     public static void nextRadius() {
         setRadius(radius >= 24 ? 8 : radius + 2);
@@ -140,26 +129,8 @@ public final class BlockEsp {
         return 0;
     }
 
-    private static void render(LevelRenderContext ctx) {
-        if (!DonutVisionClient.espEnabled() || matches.isEmpty()) return;
-        Vec3 camera = ctx.levelState().cameraRenderState.pos;
-        PoseStack stack = ctx.poseStack();
-        for (Target target : matches) {
-            stack.pushPose();
-            stack.translate(target.pos.getX() - camera.x,
-                            target.pos.getY() - camera.y,
-                            target.pos.getZ() - camera.z);
-            // 26.1.2 has no submitShapeOutline on SubmitNodeCollector.
-            // Submit line geometry using its supported custom geometry callback.
-            final int outlineColor = target.color;
-            ctx.submitNodeCollector().submitCustomGeometry(stack, RenderTypes.lines(),
-                    (pose, vertexConsumer) -> {
-                        PoseStack outlineStack = new PoseStack();
-                        outlineStack.last().pose().set(pose.pose());
-                        ShapeRenderer.renderShape(outlineStack, vertexConsumer,
-                                Shapes.block(), 0.0, 0.0, 0.0, outlineColor, 2.0f);
-                    });
-            stack.popPose();
-        }
+    /** Immutable per-tick positions. The renderer only reads these snapshots. */
+    static List<Target> targets() {
+        return matches;
     }
 }
