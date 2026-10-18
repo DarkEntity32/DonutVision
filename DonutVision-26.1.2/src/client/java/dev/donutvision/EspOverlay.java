@@ -83,6 +83,9 @@ public final class EspOverlay {
             // This list consists only of players already known to the client.
             for (AbstractClientPlayer player : mc.level.players()) {
                 if (player == mc.player || player.isRemoved() || player.isSpectator()) continue;
+                int playerRange = PlayerEsp.radius();
+                if (playerRange != BlockEsp.UNLIMITED &&
+                        player.position().distanceToSqr(mc.player.position()) > (double)playerRange * playerRange) continue;
                 AABB hitbox = player.getBoundingBox();
                 boxes.add(new Box(hitbox.minX, hitbox.minY, hitbox.minZ,
                         hitbox.maxX, hitbox.maxY, hitbox.maxZ,

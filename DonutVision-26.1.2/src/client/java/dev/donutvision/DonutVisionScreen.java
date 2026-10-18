@@ -58,13 +58,9 @@ public final class DonutVisionScreen extends Screen {
                 PlayerEsp.toggleTracers();
                 b.setMessage(Component.literal(playerTracerLabel()));
             });
-            addRenderableWidget(new RadiusSlider(left + pad, top + 195, innerWidth));
-            addRenderableWidget(new SpeedSlider(left + pad, top + 222, innerWidth));
-            button(left + pad, top + 249, innerWidth, modeLabel(), b -> {
-                BlockEsp.nextMode();
-                ClientSettings.save();
-                b.setMessage(Component.literal(modeLabel()));
-            });
+            addRenderableWidget(new BlockRangeSlider(left + pad, top + 195, innerWidth));
+            addRenderableWidget(new PlayerRangeSlider(left + pad, top + 222, innerWidth));
+            addRenderableWidget(new SpeedSlider(left + pad, top + 249, innerWidth));
         } else {
             BlockEsp.Filter[] filters = BlockEsp.Filter.values();
             for (int i = 0; i < filters.length; i++) {
@@ -77,6 +73,11 @@ public final class DonutVisionScreen extends Screen {
                     b.setMessage(Component.literal(filterLabel(filter)));
                 });
             }
+            button(left + pad, top + 196, innerWidth, modeLabel(), b -> {
+                BlockEsp.nextMode();
+                ClientSettings.save();
+                b.setMessage(Component.literal(modeLabel()));
+            });
         }
 
         button(left + pad, top + 278, innerWidth, "Close [ESC]", b -> onClose());
@@ -104,7 +105,7 @@ public final class DonutVisionScreen extends Screen {
         g.fill(left, top, left + panelWidth, top + 25, 0xFF111724);
         g.fill(left + 1, top + 25, left + panelWidth - 1, top + 26, 0xFF354B6B);
         g.text(font, "DONUTVISION", left + 12, top + 9, 0xFF9ED6FF, true);
-        g.text(font, "v1.3  |  RSHIFT / F10", left + panelWidth - 125, top + 9, 0xFF869AB5, false);
+        g.text(font, "v1.4  |  RSHIFT / F10", left + panelWidth - 125, top + 9, 0xFF869AB5, false);
         if (page == Page.BLOCKS) {
             g.text(font, "Only loaded client-side chunks can be scanned", left + 12, top + 255, 0xFF95A3B8, false);
         }
@@ -144,20 +145,34 @@ public final class DonutVisionScreen extends Screen {
         minecraft.setScreen(null);
     }
 
-    private static final class RadiusSlider extends AbstractSliderButton {
-        RadiusSlider(int x, int y, int width) {
-            super(x, y, width, 20, Component.empty(), (BlockEsp.radius() - 8) / 16.0);
+    private static final class BlockRangeSlider extends AbstractSliderButton {
+        BlockRangeSlider(int x, int y, int width) {
+            super(x, y, width, 20, Component.empty(),
+                    BlockEsp.stepIndex(BlockEsp.radius()) / (double)(BlockEsp.RANGE_STEPS.length - 1));
             updateMessage();
         }
-
-        @Override
-        protected void updateMessage() {
-            setMessage(Component.literal("ESP range: " + (8 + (int) Math.round(value * 8) * 2) + " blocks"));
+        @Override protected void updateMessage() {
+            int range = BlockEsp.stepValue((int)Math.round(value * (BlockEsp.RANGE_STEPS.length - 1)));
+            setMessage(Component.literal("Block ESP range: " + BlockEsp.rangeLabel(range)));
         }
+        @Override protected void applyValue() {
+            BlockEsp.setRadius(BlockEsp.stepValue((int)Math.round(value * (BlockEsp.RANGE_STEPS.length - 1))));
+            ClientSettings.save();
+        }
+    }
 
-        @Override
-        protected void applyValue() {
-            BlockEsp.setRadius(8 + (int) Math.round(value * 8) * 2);
+    private static final class PlayerRangeSlider extends AbstractSliderButton {
+        PlayerRangeSlider(int x, int y, int width) {
+            super(x, y, width, 20, Component.empty(),
+                    BlockEsp.stepIndex(PlayerEsp.radius()) / (double)(BlockEsp.RANGE_STEPS.length - 1));
+            updateMessage();
+        }
+        @Override protected void updateMessage() {
+            int range = BlockEsp.stepValue((int)Math.round(value * (BlockEsp.RANGE_STEPS.length - 1)));
+            setMessage(Component.literal("Player ESP range: " + BlockEsp.rangeLabel(range)));
+        }
+        @Override protected void applyValue() {
+            PlayerEsp.setRadius(BlockEsp.stepValue((int)Math.round(value * (BlockEsp.RANGE_STEPS.length - 1))));
             ClientSettings.save();
         }
     }

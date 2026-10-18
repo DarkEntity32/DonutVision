@@ -24,7 +24,8 @@ public final class ClientSettings {
             DonutVisionClient.setBlockTracers(Boolean.parseBoolean(data.getProperty("blockTracers", "true")));
             PlayerEsp.setEnabled(Boolean.parseBoolean(data.getProperty("playerEsp", "false")));
             PlayerEsp.setTracers(Boolean.parseBoolean(data.getProperty("playerTracers", "true")));
-            BlockEsp.setRadius(parseInt(data.getProperty("radius"), 12));
+            BlockEsp.setRadius(parseInt(data.getProperty("radius"), 24));
+            PlayerEsp.setRadius(parseInt(data.getProperty("playerRadius"), BlockEsp.UNLIMITED));
             BlockEsp.setMode(parseInt(data.getProperty("mode"), 0));
             Freecam.setSpeed(parseDouble(data.getProperty("speed"), 0.42));
             for (BlockEsp.Filter filter : BlockEsp.Filter.values()) {
@@ -42,6 +43,7 @@ public final class ClientSettings {
         data.setProperty("playerEsp", Boolean.toString(PlayerEsp.enabled()));
         data.setProperty("playerTracers", Boolean.toString(PlayerEsp.tracers()));
         data.setProperty("radius", Integer.toString(BlockEsp.radius()));
+        data.setProperty("playerRadius", Integer.toString(PlayerEsp.radius()));
         data.setProperty("mode", Integer.toString(BlockEsp.mode()));
         data.setProperty("speed", Double.toString(Freecam.speed()));
         for (BlockEsp.Filter filter : BlockEsp.Filter.values()) {

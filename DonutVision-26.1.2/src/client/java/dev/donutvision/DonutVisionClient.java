@@ -1,4 +1,3 @@
-
 package dev.donutvision;
 
 import com.mojang.blaze3d.platform.InputConstants;
@@ -64,7 +63,7 @@ public final class DonutVisionClient implements ClientModInitializer {
         backupMenuKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.donutvision.menu_backup", InputConstants.Type.KEYSYM, InputConstants.KEY_F10, category));
 
-        System.out.println("[DonutVision] 1.3.0 client initializer loaded. Menu keys: Right Shift or F10.");
+        System.out.println("[DonutVision] 1.4.0 client initializer loaded. Menu keys: Right Shift or F10.");
         ClientSettings.load();
         EspOverlay.install();
         ClientTickEvents.END_CLIENT_TICK.register(this::tick);
@@ -85,7 +84,7 @@ public final class DonutVisionClient implements ClientModInitializer {
         }
         if (!welcomeShown) {
             welcomeShown = true;
-            notify(mc, "v1.3.0 loaded! RShift / F10 menu. Player ESP and X-ray tracers are in Modules.");
+            notify(mc, "v1.4.0 loaded! RShift / F10 menu. Player ESP and X-ray tracers are in Modules.");
         }
         while (freecamKey.consumeClick()) {
             Freecam.toggle(mc);
@@ -103,7 +102,7 @@ public final class DonutVisionClient implements ClientModInitializer {
         while (radiusKey.consumeClick()) {
             BlockEsp.nextRadius();
             ClientSettings.save();
-            notify(mc, "ESP radius: " + BlockEsp.radius() + " blocks");
+            notify(mc, "ESP radius: " + BlockEsp.rangeLabel(BlockEsp.radius()));
         }
         Freecam.tick(mc);
         BlockEsp.tick(mc, espEnabled);
