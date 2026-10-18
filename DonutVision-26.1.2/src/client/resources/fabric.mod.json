@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "id": "donutvision",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "name": "DonutVision 26.1.2",
-  "description": "Fabric 26.1.2 client tools with configurable Freecam and Block ESP. Right Shift / F10 settings screen.",
+  "description": "Fabric 26.1.2 client tools: Freecam, through-wall Block ESP, Player ESP and tracer lines, with a Right Shift / F10 menu.",
   "environment": "client",
   "entrypoints": {
     "client": [
