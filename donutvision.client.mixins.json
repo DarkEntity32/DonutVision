@@ -1,0 +1,11 @@
+{
+  "required": true,
+  "package": "dev.donutvision.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "client": [
+    "CameraMixin",
+    "KeyboardInputMixin",
+    "MinecraftMixin"
+  ],
+  "injectors": {"defaultRequire": 1}
+}
