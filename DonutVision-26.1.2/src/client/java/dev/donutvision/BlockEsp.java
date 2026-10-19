@@ -36,9 +36,11 @@ public final class BlockEsp {
     private static final int MAX_SPAWNERS = 512;
 
     public enum Filter {
-        DIAMOND("Diamond"), DEBRIS("Ancient debris"), EMERALD("Emerald"),
-        GOLD("Gold"), CHESTS("Chests / barrels"), ENDER("Ender chest"),
-        SHULKERS("Shulker boxes");
+        DIAMOND("Diamonds"), DEBRIS("Ancient debris"), EMERALD("Emeralds"),
+        GOLD("Gold"), REDSTONE("Redstone blocks"),
+        CHESTS("Chests"), BARRELS("Barrels"), ENDER("Ender chests"),
+        SHULKERS("Shulker boxes"), HOPPERS("Hoppers"),
+        DISPENSERS("Dispensers / droppers"), FURNACES("Furnaces");
         private final String label;
         Filter(String label) { this.label = label; }
         public String label() { return label; }
@@ -47,7 +49,7 @@ public final class BlockEsp {
     private static final boolean[] filterEnabled = new boolean[Filter.values().length];
     static { java.util.Arrays.fill(filterEnabled, true); }
     private static int radius = 24;
-    private static int mode = 0; // 0 ores, 1 containers, 2 both
+    private static int mode = 0; // 0 ores, 1 storage, 2 ores+storage, 3 storage+redstone, 4 all
     private static List<Target> matches = List.of();
     private static final ArrayList<Target> building = new ArrayList<>();
     private static List<Target> spawnerMatches = List.of();
@@ -89,9 +91,9 @@ public final class BlockEsp {
         radius = blocks == UNLIMITED ? UNLIMITED : Math.max(10, Math.min(512, blocks));
         clear();
     }
-    public static void nextMode() { setMode((mode + 1) % 3); }
+    public static void nextMode() { setMode((mode + 1) % 5); }
     public static int mode() { return mode; }
-    public static void setMode(int value) { mode = Math.max(0, Math.min(value, 2)); clear(); }
+    public static void setMode(int value) { mode = Math.max(0, Math.min(value, 4)); clear(); }
     public static boolean filterEnabled(Filter filter) { return filterEnabled[filter.ordinal()]; }
     public static void setFilter(Filter filter, boolean enabled) {
         filterEnabled[filter.ordinal()] = enabled;
@@ -101,8 +103,10 @@ public final class BlockEsp {
     public static String modeLabel() {
         return switch (mode) {
             case 0 -> "Ores";
-            case 1 -> "Storage blocks";
-            default -> "Ores + storage";
+            case 1 -> "Storage";
+            case 2 -> "Ores + storage";
+            case 3 -> "Storage + redstone blocks";
+            default -> "All targets";
         };
     }
 
@@ -272,17 +276,31 @@ public final class BlockEsp {
         }
     }
 
+    /** Box and tracer use exactly the same ARGB colour for each target type. */
     private static int colorFor(Block block) {
-        if (mode != 1) {
-            if (filterEnabled(Filter.DEBRIS) && block == Blocks.ANCIENT_DEBRIS) return 0xFFFF8800;
-            if (filterEnabled(Filter.DIAMOND) && (block == Blocks.DIAMOND_ORE || block == Blocks.DEEPSLATE_DIAMOND_ORE)) return 0xFF00E5FF;
-            if (filterEnabled(Filter.EMERALD) && (block == Blocks.EMERALD_ORE || block == Blocks.DEEPSLATE_EMERALD_ORE)) return 0xFF16FF57;
-            if (filterEnabled(Filter.GOLD) && (block == Blocks.GOLD_ORE || block == Blocks.DEEPSLATE_GOLD_ORE || block == Blocks.NETHER_GOLD_ORE)) return 0xFFFFDD00;
+        // Ore-only, ore+storage and All.
+        boolean ores = mode == 0 || mode == 2 || mode == 4;
+        // Storage, ore+storage, storage+redstone and All.
+        boolean storage = mode == 1 || mode == 2 || mode == 3 || mode == 4;
+        // Redstone is deliberately available in its own storage combination and All.
+        boolean redstone = mode == 3 || mode == 4;
+
+        if (ores) {
+            if (filterEnabled(Filter.DEBRIS) && block == Blocks.ANCIENT_DEBRIS) return 0xFFFF943E;
+            if (filterEnabled(Filter.DIAMOND) && (block == Blocks.DIAMOND_ORE || block == Blocks.DEEPSLATE_DIAMOND_ORE)) return 0xFF35DEFF;
+            if (filterEnabled(Filter.EMERALD) && (block == Blocks.EMERALD_ORE || block == Blocks.DEEPSLATE_EMERALD_ORE)) return 0xFF4FFFA0;
+            if (filterEnabled(Filter.GOLD) && (block == Blocks.GOLD_ORE || block == Blocks.DEEPSLATE_GOLD_ORE || block == Blocks.NETHER_GOLD_ORE)) return 0xFFFFD46B;
         }
-        if (mode != 0) {
-            if (filterEnabled(Filter.CHESTS) && (block == Blocks.CHEST || block == Blocks.TRAPPED_CHEST || block == Blocks.BARREL)) return 0xFFFF55AA;
-            if (filterEnabled(Filter.ENDER) && block == Blocks.ENDER_CHEST) return 0xFFAA55FF;
-            if (filterEnabled(Filter.SHULKERS) && block instanceof net.minecraft.world.level.block.ShulkerBoxBlock) return 0xFFFF55AA;
+        if (redstone && filterEnabled(Filter.REDSTONE) && block == Blocks.REDSTONE_BLOCK) return 0xFFFF485F;
+        if (storage) {
+            if (filterEnabled(Filter.CHESTS) && block == Blocks.CHEST) return 0xFFE8CBA5; // Beige
+            if (filterEnabled(Filter.CHESTS) && block == Blocks.TRAPPED_CHEST) return 0xFFE5A985; // Apricot
+            if (filterEnabled(Filter.BARRELS) && block == Blocks.BARREL) return 0xFFCB9B6C; // Wood
+            if (filterEnabled(Filter.ENDER) && block == Blocks.ENDER_CHEST) return 0xFFA996FF; // Violet
+            if (filterEnabled(Filter.SHULKERS) && block instanceof net.minecraft.world.level.block.ShulkerBoxBlock) return 0xFFFF8CCF; // Pink
+            if (filterEnabled(Filter.HOPPERS) && block == Blocks.HOPPER) return 0xFF9AA4B2; // Grey
+            if (filterEnabled(Filter.DISPENSERS) && (block == Blocks.DISPENSER || block == Blocks.DROPPER)) return 0xFF86A8C0;
+            if (filterEnabled(Filter.FURNACES) && (block == Blocks.FURNACE || block == Blocks.BLAST_FURNACE || block == Blocks.SMOKER)) return 0xFF80A5A2;
         }
         return 0;
     }
