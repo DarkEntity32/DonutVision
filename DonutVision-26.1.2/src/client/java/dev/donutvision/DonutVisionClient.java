@@ -11,6 +11,7 @@ import net.minecraft.resources.Identifier;
 
 public final class DonutVisionClient implements ClientModInitializer {
     private static boolean espEnabled;
+    private static boolean spawnerEspEnabled;
     private static boolean blockTracers = true;
     private static KeyMapping freecamKey;
     private static KeyMapping espKey;
@@ -25,8 +26,24 @@ public final class DonutVisionClient implements ClientModInitializer {
     }
 
     public static void setEspEnabled(boolean enabled) {
-        espEnabled = enabled;
-        if (!enabled) BlockEsp.clear();
+        if (espEnabled != enabled) {
+            espEnabled = enabled;
+            BlockEsp.clear(); // Rebuild immediately when ore/storage scanning changes.
+        }
+    }
+
+    public static boolean spawnerEspEnabled() { return spawnerEspEnabled; }
+
+    public static void setSpawnerEspEnabled(boolean enabled) {
+        if (spawnerEspEnabled != enabled) {
+            spawnerEspEnabled = enabled;
+            BlockEsp.clear(); // Immediately scan spawners after the menu toggle.
+        }
+    }
+
+    public static void toggleSpawnerEsp() {
+        setSpawnerEspEnabled(!spawnerEspEnabled);
+        ClientSettings.save();
     }
 
     public static boolean blockTracers() { return blockTracers; }
@@ -63,7 +80,7 @@ public final class DonutVisionClient implements ClientModInitializer {
         backupMenuKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.donutvision.menu_backup", InputConstants.Type.KEYSYM, InputConstants.KEY_F10, category));
 
-        System.out.println("[DonutVision] 1.4.0 client initializer loaded. Menu keys: Right Shift or F10.");
+        System.out.println("[DonutVision] 1.5.0 client initializer loaded. Menu keys: Right Shift or F10.");
         ClientSettings.load();
         EspOverlay.install();
         ClientTickEvents.END_CLIENT_TICK.register(this::tick);
@@ -84,7 +101,7 @@ public final class DonutVisionClient implements ClientModInitializer {
         }
         if (!welcomeShown) {
             welcomeShown = true;
-            notify(mc, "v1.4.0 loaded! RShift / F10 menu. Player ESP and X-ray tracers are in Modules.");
+            notify(mc, "v1.5.0 loaded! RShift/F10 menu. Faster Block ESP + Spawner ESP.");
         }
         while (freecamKey.consumeClick()) {
             Freecam.toggle(mc);
@@ -105,7 +122,7 @@ public final class DonutVisionClient implements ClientModInitializer {
             notify(mc, "ESP radius: " + BlockEsp.rangeLabel(BlockEsp.radius()));
         }
         Freecam.tick(mc);
-        BlockEsp.tick(mc, espEnabled);
+        BlockEsp.tick(mc, espEnabled, spawnerEspEnabled);
     }
 
     private static void notify(Minecraft mc, String text) {

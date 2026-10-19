@@ -22,6 +22,7 @@ public final class ClientSettings {
             data.load(input);
             DonutVisionClient.setEspEnabled(Boolean.parseBoolean(data.getProperty("espEnabled", "false")));
             DonutVisionClient.setBlockTracers(Boolean.parseBoolean(data.getProperty("blockTracers", "true")));
+            DonutVisionClient.setSpawnerEspEnabled(Boolean.parseBoolean(data.getProperty("spawnerEsp", "false")));
             PlayerEsp.setEnabled(Boolean.parseBoolean(data.getProperty("playerEsp", "false")));
             PlayerEsp.setTracers(Boolean.parseBoolean(data.getProperty("playerTracers", "true")));
             BlockEsp.setRadius(parseInt(data.getProperty("radius"), 24));
@@ -40,6 +41,7 @@ public final class ClientSettings {
         Properties data = new Properties();
         data.setProperty("espEnabled", Boolean.toString(DonutVisionClient.espEnabled()));
         data.setProperty("blockTracers", Boolean.toString(DonutVisionClient.blockTracers()));
+        data.setProperty("spawnerEsp", Boolean.toString(DonutVisionClient.spawnerEspEnabled()));
         data.setProperty("playerEsp", Boolean.toString(PlayerEsp.enabled()));
         data.setProperty("playerTracers", Boolean.toString(PlayerEsp.tracers()));
         data.setProperty("radius", Integer.toString(BlockEsp.radius()));

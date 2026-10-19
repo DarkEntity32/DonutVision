@@ -13,6 +13,8 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.List;
 import java.util.function.Predicate;
 
@@ -27,7 +29,11 @@ public final class BlockEsp {
     };
     private static final int MAX_CLIENT_CHUNK_RADIUS = 32;
     private static final int MAX_VISIBLE_TARGETS = 2048;
-    private static final int SECTIONS_PER_TICK = 12;
+    // Larger batches help distant ESP targets appear sooner; work remains time-budgeted.
+    private static final int SECTIONS_PER_TICK = 36;
+    private static final long SCAN_TIME_BUDGET_NS = 3_500_000L;
+    private static final int SCAN_REFRESH_TICKS = 200;
+    private static final int MAX_SPAWNERS = 512;
 
     public enum Filter {
         DIAMOND("Diamond"), DEBRIS("Ancient debris"), EMERALD("Emerald"),
@@ -44,15 +50,20 @@ public final class BlockEsp {
     private static int mode = 0; // 0 ores, 1 containers, 2 both
     private static List<Target> matches = List.of();
     private static final ArrayList<Target> building = new ArrayList<>();
+    private static List<Target> spawnerMatches = List.of();
+    private static final ArrayList<Target> spawnerBuilding = new ArrayList<>();
+    private static final Set<BlockPos> knownSpawners = new HashSet<>();
     private static List<ChunkPoint> scanChunks = List.of();
     private static int chunkIndex = 0;
     private static int sectionIndex = 0;
-    private static int ticksSinceScan = 100;
+    private static int ticksSinceScan = SCAN_REFRESH_TICKS;
     private static int ticksSincePublish = 0;
     private static BlockPos scanCenter = BlockPos.ZERO;
     private static ClientLevel scanLevel;
     private static boolean scanning = false;
-    private static final Predicate<BlockState> INTERESTING = state -> colorFor(state.getBlock()) != 0;
+    // Palette prefilter: avoids iterating 4096 voxels for most empty/irrelevant sections.
+    private static final Predicate<BlockState> INTERESTING = state ->
+            colorFor(state.getBlock()) != 0 || isSpawner(state.getBlock());
 
     private record ChunkPoint(int x, int z) { }
     private BlockEsp() { }
@@ -97,16 +108,19 @@ public final class BlockEsp {
 
     public static void clear() {
         matches = List.of();
+        spawnerMatches = List.of();
         building.clear();
+        spawnerBuilding.clear();
+        knownSpawners.clear();
         scanChunks = List.of();
         scanning = false;
         chunkIndex = 0;
         sectionIndex = 0;
-        ticksSinceScan = 100;
+        ticksSinceScan = SCAN_REFRESH_TICKS;
     }
 
-    public static void tick(Minecraft mc, boolean enabled) {
-        if (!enabled || mc.level == null || mc.player == null) return;
+    public static void tick(Minecraft mc, boolean blockEnabled, boolean spawnerEnabled) {
+        if ((!blockEnabled && !spawnerEnabled) || mc.level == null || mc.player == null) return;
         ClientLevel level = mc.level;
         Vec3 scanPosition = Freecam.active() ? Freecam.position() : mc.player.position();
         BlockPos center = BlockPos.containing(scanPosition);
@@ -118,14 +132,15 @@ public final class BlockEsp {
             clear();
         }
         if (!scanning) {
-            if (++ticksSinceScan < 80) return;
+            if (++ticksSinceScan < SCAN_REFRESH_TICKS) return;
             begin(level, center, mc.player.blockPosition());
         }
         // Process at most a few chunk sections per tick; do not scan the entire map in one frame.
         int processed = 0;
-        long deadline = System.nanoTime() + 2_500_000L;
+        long deadline = System.nanoTime() + SCAN_TIME_BUDGET_NS;
         while (scanning && processed < SECTIONS_PER_TICK && System.nanoTime() < deadline) {
-            if (chunkIndex >= scanChunks.size() || building.size() >= MAX_VISIBLE_TARGETS) {
+            if (chunkIndex >= scanChunks.size() ||
+                    (!spawnerEnabled && building.size() >= MAX_VISIBLE_TARGETS)) {
                 finish();
                 break;
             }
@@ -134,6 +149,19 @@ public final class BlockEsp {
             if (chunk == null) {
                 chunkIndex++;
                 sectionIndex = 0;
+                continue;
+            }
+            // Spawners are block entities. Query them as soon as a chunk is visited,
+            // without waiting for all chunk sections/ores to finish scanning.
+            if (sectionIndex == 0 && spawnerEnabled) {
+                scanSpawnerBlockEntities(chunk);
+            }
+            // Once the normal ESP drawing budget is full, still continue finding
+            // spawners rather than allowing diamonds/chests to hide them.
+            if (!blockEnabled || building.size() >= MAX_VISIBLE_TARGETS) {
+                chunkIndex++;
+                sectionIndex = 0;
+                processed++;
                 continue;
             }
             LevelChunkSection[] sections = chunk.getSections();
@@ -159,10 +187,15 @@ public final class BlockEsp {
                     for (int lz = 0; lz < 16; lz++) {
                         int z = baseZ + lz;
                         if (radius != UNLIMITED && Math.abs(z - scanCenter.getZ()) > radius) continue;
-                        int color = colorFor(section.getBlockState(lx, ly, lz).getBlock());
-                        if (color != 0) {
-                            building.add(new Target(new BlockPos(x, y, z), color));
-                            if (building.size() >= MAX_VISIBLE_TARGETS) break;
+                        Block block = section.getBlockState(lx, ly, lz).getBlock();
+                        if (isSpawner(block)) {
+                            if (spawnerEnabled) addSpawner(new BlockPos(x, y, z), block);
+                        } else {
+                            int color = colorFor(block);
+                            if (color != 0) {
+                                building.add(new Target(new BlockPos(x, y, z), color));
+                                if (building.size() >= MAX_VISIBLE_TARGETS) break;
+                            }
                         }
                     }
                     if (building.size() >= MAX_VISIBLE_TARGETS) break;
@@ -171,8 +204,9 @@ public final class BlockEsp {
             }
         }
         // Show partial results during a long scan instead of forcing the player to wait.
-        if (scanning && ++ticksSincePublish >= 6) {
+        if (scanning && ++ticksSincePublish >= 2) {
             matches = List.copyOf(building);
+            spawnerMatches = List.copyOf(spawnerBuilding);
             ticksSincePublish = 0;
         }
     }
@@ -183,7 +217,9 @@ public final class BlockEsp {
         ticksSinceScan = 0;
         ticksSincePublish = 0;
         building.clear();
-        matches = List.of();
+        spawnerBuilding.clear();
+        knownSpawners.clear();
+        // Keep previously found highlights visible until refreshed results arrive.
         chunkIndex = 0;
         sectionIndex = 0;
         int rangeChunks = radius == UNLIMITED ? MAX_CLIENT_CHUNK_RADIUS : Math.min(
@@ -209,8 +245,31 @@ public final class BlockEsp {
 
     private static void finish() {
         matches = List.copyOf(building);
+        spawnerMatches = List.copyOf(spawnerBuilding);
         scanning = false;
         ticksSinceScan = 0;
+    }
+
+    private static boolean isSpawner(Block block) {
+        return block == Blocks.SPAWNER || block == Blocks.TRIAL_SPAWNER;
+    }
+
+    private static void addSpawner(BlockPos pos, Block block) {
+        if (spawnerBuilding.size() >= MAX_SPAWNERS || !knownSpawners.add(pos.immutable())) return;
+        int color = block == Blocks.TRIAL_SPAWNER ? 0xFFFFBD43 : 0xFFFF4A56;
+        spawnerBuilding.add(new Target(pos.immutable(), color));
+    }
+
+    private static void scanSpawnerBlockEntities(LevelChunk chunk) {
+        for (BlockPos pos : chunk.getBlockEntities().keySet()) {
+            if (spawnerBuilding.size() >= MAX_SPAWNERS) break;
+            if (radius != UNLIMITED && (
+                    Math.abs(pos.getX() - scanCenter.getX()) > radius ||
+                    Math.abs(pos.getY() - scanCenter.getY()) > radius ||
+                    Math.abs(pos.getZ() - scanCenter.getZ()) > radius)) continue;
+            Block block = chunk.getBlockState(pos).getBlock();
+            if (isSpawner(block)) addSpawner(pos, block);
+        }
     }
 
     private static int colorFor(Block block) {
@@ -228,4 +287,5 @@ public final class BlockEsp {
         return 0;
     }
     static List<Target> targets() { return matches; }
+    static List<Target> spawnerTargets() { return spawnerMatches; }
 }

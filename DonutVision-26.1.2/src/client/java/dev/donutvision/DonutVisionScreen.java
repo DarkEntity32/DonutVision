@@ -25,7 +25,7 @@ public final class DonutVisionScreen extends Screen {
     @Override
     protected void init() {
         panelWidth = Math.min(360, width - 12);
-        panelHeight = 304;
+        panelHeight = 340;
         left = (width - panelWidth) / 2;
         top = (height - panelHeight) / 2;
 
@@ -46,21 +46,25 @@ public final class DonutVisionScreen extends Screen {
                 DonutVisionClient.toggleEsp();
                 b.setMessage(Component.literal(espLabel()));
             });
-            button(left + pad, top + 114, innerWidth, playerLabel(), b -> {
+            button(left + pad, top + 114, innerWidth, spawnerLabel(), b -> {
+                DonutVisionClient.toggleSpawnerEsp();
+                b.setMessage(Component.literal(spawnerLabel()));
+            });
+            button(left + pad, top + 141, innerWidth, playerLabel(), b -> {
                 PlayerEsp.toggle();
                 b.setMessage(Component.literal(playerLabel()));
             });
-            button(left + pad, top + 141, innerWidth, blockTracerLabel(), b -> {
+            button(left + pad, top + 168, innerWidth, blockTracerLabel(), b -> {
                 DonutVisionClient.toggleBlockTracers();
                 b.setMessage(Component.literal(blockTracerLabel()));
             });
-            button(left + pad, top + 168, innerWidth, playerTracerLabel(), b -> {
+            button(left + pad, top + 195, innerWidth, playerTracerLabel(), b -> {
                 PlayerEsp.toggleTracers();
                 b.setMessage(Component.literal(playerTracerLabel()));
             });
-            addRenderableWidget(new BlockRangeSlider(left + pad, top + 195, innerWidth));
-            addRenderableWidget(new PlayerRangeSlider(left + pad, top + 222, innerWidth));
-            addRenderableWidget(new SpeedSlider(left + pad, top + 249, innerWidth));
+            addRenderableWidget(new BlockRangeSlider(left + pad, top + 222, innerWidth));
+            addRenderableWidget(new PlayerRangeSlider(left + pad, top + 249, innerWidth));
+            addRenderableWidget(new SpeedSlider(left + pad, top + 276, innerWidth));
         } else {
             BlockEsp.Filter[] filters = BlockEsp.Filter.values();
             for (int i = 0; i < filters.length; i++) {
@@ -80,7 +84,7 @@ public final class DonutVisionScreen extends Screen {
             });
         }
 
-        button(left + pad, top + 278, innerWidth, "Close [ESC]", b -> onClose());
+        button(left + pad, top + 309, innerWidth, "Close [ESC]", b -> onClose());
     }
 
     private void open(Page target) {
@@ -105,9 +109,10 @@ public final class DonutVisionScreen extends Screen {
         g.fill(left, top, left + panelWidth, top + 25, 0xFF111724);
         g.fill(left + 1, top + 25, left + panelWidth - 1, top + 26, 0xFF354B6B);
         g.text(font, "DONUTVISION", left + 12, top + 9, 0xFF9ED6FF, true);
-        g.text(font, "v1.4  |  RSHIFT / F10", left + panelWidth - 125, top + 9, 0xFF869AB5, false);
+        g.text(font, "v1.5  |  RSHIFT / F10", left + panelWidth - 125, top + 9, 0xFF869AB5, false);
         if (page == Page.BLOCKS) {
-            g.text(font, "Only loaded client-side chunks can be scanned", left + 12, top + 255, 0xFF95A3B8, false);
+            g.text(font, "Spawner ESP: enable separately in Modules", left + 12, top + 255, 0xFF95A3B8, false);
+            g.text(font, "Scan limited to client-loaded chunks", left + 12, top + 275, 0xFF95A3B8, false);
         }
     }
 
@@ -117,6 +122,10 @@ public final class DonutVisionScreen extends Screen {
 
     private static String espLabel() {
         return "Block ESP    " + (DonutVisionClient.espEnabled() ? "ON" : "OFF");
+    }
+
+    private static String spawnerLabel() {
+        return "Spawner ESP    " + (DonutVisionClient.spawnerEspEnabled() ? "ON" : "OFF");
     }
 
     private static String playerLabel() {
