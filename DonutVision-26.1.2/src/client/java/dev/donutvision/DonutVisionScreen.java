@@ -2,10 +2,14 @@ package dev.donutvision;
 
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractSliderButton;
+import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 
 /** Compact four-tab configuration menu. Uses standard Minecraft widgets for input compatibility. */
@@ -24,22 +28,37 @@ public final class DonutVisionScreen extends Screen {
     private int left, top, panelWidth, panelHeight;
     private int pad, gap, colWidth, innerWidth;
 
-    public DonutVisionScreen() { this(Page.MODULES); }
+    // The tabs and Done button stay fixed. Only the centre section scrolls.
+    // Fractional offsets are preserved for smooth MacBook trackpad scrolling.
+    private static final int SCROLL_CONTENT_HEIGHT = 258;
+    private static final int SCROLL_STEP = 20;
+    private final List<ScrollControl> scrollControls = new ArrayList<>();
+    private double scrollOffset;
+    private boolean scrollbarDragging;
+    private double scrollbarGrabY;
 
-    private DonutVisionScreen(Page page) {
+    private record ScrollControl(AbstractWidget widget, int originalY) {}
+
+
+    public DonutVisionScreen() { this(Page.MODULES, 0.0); }
+
+    private DonutVisionScreen(Page page, double scrollOffset) {
         super(Component.literal("DonutVision"));
         this.page = page;
+        this.scrollOffset = scrollOffset;
     }
 
     @Override
     protected void init() {
+        scrollControls.clear();
+        scrollbarDragging = false;
         panelWidth = Math.min(448, width - 12);
         panelHeight = Math.min(340, height - 8);
         left = (width - panelWidth) / 2;
         top = (height - panelHeight) / 2;
         pad = 16;
         gap = 10;
-        innerWidth = panelWidth - 2 * pad;
+        innerWidth = panelWidth - 2 * pad - 12; // reserve a strip for the scrollbar
         colWidth = (innerWidth - gap) / 2;
 
         // Four compact navigation tabs.
@@ -62,30 +81,32 @@ public final class DonutVisionScreen extends Screen {
         }
         addButton(left + pad, top + panelHeight - 30, innerWidth, 20,
                 "Done   [ESC]", b -> onClose());
+        scrollOffset = Math.max(0.0, Math.min(scrollOffset, maxScroll()));
+        layoutScrolledControls();
     }
 
     private void initModules() {
-        toggle(left + pad, top + 107, colWidth, "Freecam", Freecam.active(), b -> {
+        scrollToggle(left + pad, top + 107, colWidth, "Freecam", Freecam.active(), b -> {
             Freecam.toggle(minecraft);
             refresh();
         });
-        toggle(left + pad + colWidth + gap, top + 107, colWidth, "Block ESP", DonutVisionClient.espEnabled(), b -> {
+        scrollToggle(left + pad + colWidth + gap, top + 107, colWidth, "Block ESP", DonutVisionClient.espEnabled(), b -> {
             DonutVisionClient.toggleEsp();
             refresh();
         });
-        toggle(left + pad, top + 135, colWidth, "Spawner ESP", DonutVisionClient.spawnerEspEnabled(), b -> {
+        scrollToggle(left + pad, top + 135, colWidth, "Spawner ESP", DonutVisionClient.spawnerEspEnabled(), b -> {
             DonutVisionClient.toggleSpawnerEsp();
             refresh();
         });
-        toggle(left + pad + colWidth + gap, top + 135, colWidth, "Player ESP", PlayerEsp.enabled(), b -> {
+        scrollToggle(left + pad + colWidth + gap, top + 135, colWidth, "Player ESP", PlayerEsp.enabled(), b -> {
             PlayerEsp.toggle();
             refresh();
         });
-        toggle(left + pad, top + 163, colWidth, "Block tracers", DonutVisionClient.blockTracers(), b -> {
+        scrollToggle(left + pad, top + 163, colWidth, "Block tracers", DonutVisionClient.blockTracers(), b -> {
             DonutVisionClient.toggleBlockTracers();
             refresh();
         });
-        toggle(left + pad + colWidth + gap, top + 163, colWidth, "Player tracers", PlayerEsp.tracers(), b -> {
+        scrollToggle(left + pad + colWidth + gap, top + 163, colWidth, "Player tracers", PlayerEsp.tracers(), b -> {
             PlayerEsp.toggleTracers();
             refresh();
         });
@@ -97,13 +118,13 @@ public final class DonutVisionScreen extends Screen {
             BlockEsp.Filter filter = filters[i];
             int x = left + pad + (i % 2) * (colWidth + gap);
             int y = top + 98 + (i / 2) * 25;
-            toggle(x, y, colWidth, filter.label(), BlockEsp.filterEnabled(filter), b -> {
+            scrollToggle(x, y, colWidth, filter.label(), BlockEsp.filterEnabled(filter), b -> {
                 BlockEsp.toggleFilter(filter);
                 ClientSettings.save();
                 refresh();
             });
         }
-        addButton(left + pad, top + 255, innerWidth, 20,
+        addScrollButton(left + pad, top + 255, innerWidth, 20,
                 "Mode: " + BlockEsp.modeLabel() + "   >", b -> {
                     BlockEsp.nextMode();
                     ClientSettings.save();
@@ -112,22 +133,120 @@ public final class DonutVisionScreen extends Screen {
     }
 
     private void initSettings() {
-        addRenderableWidget(new BlockRangeSlider(left + pad, top + 117, innerWidth));
-        addRenderableWidget(new PlayerRangeSlider(left + pad, top + 164, innerWidth));
-        addRenderableWidget(new SpeedSlider(left + pad, top + 211, innerWidth));
+        addScrollableWidget(new BlockRangeSlider(left + pad, top + 117, innerWidth));
+        addScrollableWidget(new PlayerRangeSlider(left + pad, top + 164, innerWidth));
+        addScrollableWidget(new SpeedSlider(left + pad, top + 211, innerWidth));
     }
 
-    private void toggle(int x, int y, int w, String title, boolean on, Button.OnPress action) {
-        addButton(x, y, w, 20, title + "   " + (on ? "ON" : "OFF"), action);
+    private void scrollToggle(int x, int y, int w, String title, boolean on, Button.OnPress action) {
+        addScrollButton(x, y, w, 20, title + "   " + (on ? "ON" : "OFF"), action);
+    }
+
+    private void addScrollButton(int x, int y, int w, int h, String text, Button.OnPress action) {
+        addScrollableWidget(Button.builder(Component.literal(text), action).bounds(x, y, w, h).build());
+    }
+
+    private <T extends AbstractWidget> T addScrollableWidget(T widget) {
+        addRenderableWidget(widget);
+        scrollControls.add(new ScrollControl(widget, widget.getY()));
+        return widget;
+    }
+
+    private int viewportTop() { return top + 78; }
+    private int viewportBottom() { return top + panelHeight - 42; }
+    private int viewportHeight() { return Math.max(1, viewportBottom() - viewportTop()); }
+    private double maxScroll() { return Math.max(0.0, SCROLL_CONTENT_HEIGHT - viewportHeight()); }
+
+    private void setScrollOffset(double desired) {
+        double next = Math.max(0.0, Math.min(desired, maxScroll()));
+        if (next != scrollOffset) {
+            scrollOffset = next;
+            layoutScrolledControls();
+        }
+    }
+
+    private void layoutScrolledControls() {
+        for (ScrollControl entry : scrollControls) {
+            AbstractWidget widget = entry.widget();
+            widget.setY(entry.originalY() - (int)Math.round(scrollOffset));
+            // Buttons outside the viewport must not remain clickable or overlap the tabs/footer.
+            widget.visible = widget.getY() >= viewportTop()
+                    && widget.getY() + widget.getHeight() <= viewportBottom();
+        }
+    }
+
+    private int scrollbarX() { return left + panelWidth - 13; }
+    private int thumbHeight() {
+        int track = viewportHeight();
+        return Math.max(24, Math.min(track, (int)Math.round(track * (track / (double)SCROLL_CONTENT_HEIGHT))));
+    }
+    private int thumbY() {
+        int room = viewportHeight() - thumbHeight();
+        return viewportTop() + (maxScroll() == 0 ? 0 : (int)Math.round(scrollOffset / maxScroll() * room));
+    }
+
+    @Override
+    public boolean mouseScrolled(double x, double y, double horizontal, double vertical) {
+        // Both mouse wheel and MacBook two-finger gestures report scroll here.
+        if (x >= left && x <= left + panelWidth && y >= viewportTop() && y <= viewportBottom()
+                && vertical != 0.0 && maxScroll() > 0.0) {
+            setScrollOffset(scrollOffset - vertical * SCROLL_STEP);
+            return true;
+        }
+        return super.mouseScrolled(x, y, horizontal, vertical);
+    }
+
+    @Override
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        double x = event.x();
+        double y = event.y();
+        if (event.button() == 0 && x >= scrollbarX() - 3 && x <= scrollbarX() + 9
+                && y >= viewportTop() && y <= viewportBottom() && maxScroll() > 0.0) {
+            scrollbarDragging = true;
+            if (y >= thumbY() && y <= thumbY() + thumbHeight()) {
+                scrollbarGrabY = y - thumbY();
+            } else {
+                scrollbarGrabY = thumbHeight() / 2.0;
+                dragScrollbarTo(y);
+            }
+            return true;
+        }
+        return super.mouseClicked(event, doubleClick);
+    }
+
+    private void dragScrollbarTo(double pointerY) {
+        int travel = viewportHeight() - thumbHeight();
+        if (travel > 0) {
+            double fraction = (pointerY - scrollbarGrabY - viewportTop()) / travel;
+            setScrollOffset(fraction * maxScroll());
+        }
+    }
+
+    @Override
+    public boolean mouseDragged(MouseButtonEvent event, double dx, double dy) {
+        if (scrollbarDragging) {
+            dragScrollbarTo(event.y());
+            return true;
+        }
+        return super.mouseDragged(event, dx, dy);
+    }
+
+    @Override
+    public boolean mouseReleased(MouseButtonEvent event) {
+        if (scrollbarDragging && event.button() == 0) {
+            scrollbarDragging = false;
+            return true;
+        }
+        return super.mouseReleased(event);
     }
 
     private void addButton(int x, int y, int w, int h, String text, Button.OnPress action) {
         addRenderableWidget(Button.builder(Component.literal(text), action).bounds(x, y, w, h).build());
     }
 
-    private void refresh() { minecraft.setScreen(new DonutVisionScreen(page)); }
+    private void refresh() { minecraft.setScreen(new DonutVisionScreen(page, scrollOffset)); }
     private void switchTo(Page target) {
-        if (target != page) minecraft.setScreen(new DonutVisionScreen(target));
+        if (target != page) minecraft.setScreen(new DonutVisionScreen(target, 0.0));
     }
 
     private static String label(Page page) {
@@ -153,15 +272,25 @@ public final class DonutVisionScreen extends Screen {
         g.fill(left, top, left + panelWidth, top + 3, ACCENT);
         g.text(font, "DONUT", left + pad, top + 15, LIGHT, true);
         g.text(font, "VISION", left + pad + 36, top + 15, ACCENT, true);
-        g.text(font, "v1.6.0  |  RSHIFT / F10", left + panelWidth - 148, top + 16, MUTED, false);
+        g.text(font, "v1.6.1  |  RSHIFT / F10", left + panelWidth - 148, top + 16, MUTED, false);
         g.fill(left + pad, top + 74, left + panelWidth - pad, top + 75, BORDER);
 
+        // Clip the content artwork to the central scrolling viewport.
+        g.enableScissor(left + pad - 4, viewportTop(), left + panelWidth - 17, viewportBottom());
+        g.pose().pushMatrix();
+        g.pose().translate(0.0f, (float)-scrollOffset);
         switch (page) {
             case MODULES -> drawModules(g);
             case FILTERS -> drawFilters(g);
             case SETTINGS -> drawSettings(g);
             case COLORS -> drawColors(g);
         }
+        g.pose().popMatrix();
+        g.disableScissor();
+
+        // Always-visible scrollbar: mouse drag on the handle or click the track.
+        g.fill(scrollbarX(), viewportTop(), scrollbarX() + 6, viewportBottom(), INSET);
+        g.fill(scrollbarX(), thumbY(), scrollbarX() + 6, thumbY() + thumbHeight(), ACCENT);
         g.fill(left + pad, top + panelHeight - 37, left + panelWidth - pad, top + panelHeight - 36, BORDER);
     }
 
