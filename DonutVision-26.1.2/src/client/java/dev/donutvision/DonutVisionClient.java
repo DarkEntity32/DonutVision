@@ -80,7 +80,7 @@ public final class DonutVisionClient implements ClientModInitializer {
         backupMenuKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.donutvision.menu_backup", InputConstants.Type.KEYSYM, InputConstants.KEY_F10, category));
 
-        System.out.println("[DonutVision] 1.6.0 client initializer loaded. Menu keys: Right Shift or F10.");
+        System.out.println("[DonutVision] 1.7.0 client initializer loaded. Menu keys: Right Shift or F10.");
         ClientSettings.load();
         EspOverlay.install();
         ClientTickEvents.END_CLIENT_TICK.register(this::tick);
@@ -101,7 +101,7 @@ public final class DonutVisionClient implements ClientModInitializer {
         }
         if (!welcomeShown) {
             welcomeShown = true;
-            notify(mc, "v1.6.0 loaded! RShift/F10 menu. Storage + Redstone mode and custom ESP colors.");
+            notify(mc, "v1.7.0 loaded! RShift/F10 menu. Animated orange GUI and fast persistent Block ESP.");
         }
         while (freecamKey.consumeClick()) {
             Freecam.toggle(mc);

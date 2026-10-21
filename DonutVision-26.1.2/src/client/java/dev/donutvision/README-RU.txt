@@ -1,0 +1,1 @@
+Обновление DonutVision 1.7.0: закинь 3 Java-файла из архива в DonutVision-26.1.2/src/client/java/dev/donutvision/ и замени старые. Для версии 1.7.0 замени также gradle.properties и fabric.mod.json из полного исходного ZIP. Запусти новую сборку GitHub Actions.
