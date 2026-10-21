@@ -87,6 +87,14 @@ public final class EspOverlay {
                         target.color(), DonutVisionClient.blockTracers()));
             }
         }
+        // Full-grown amethyst clusters: purple boxes and optional block-style tracer lines.
+        if (DonutVisionClient.crystalEspEnabled()) {
+            for (BlockEsp.Target target : BlockEsp.crystalTargets()) {
+                double x = target.pos().getX(), y = target.pos().getY(), z = target.pos().getZ();
+                boxes.add(new Box(x, y, z, x + 1, y + 1, z + 1,
+                        target.color(), DonutVisionClient.blockTracers()));
+            }
+        }
         if (PlayerEsp.enabled()) {
             // This list consists only of players already known to the client.
             for (AbstractClientPlayer player : mc.level.players()) {

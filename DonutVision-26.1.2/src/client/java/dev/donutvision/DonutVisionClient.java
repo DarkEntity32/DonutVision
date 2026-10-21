@@ -12,6 +12,7 @@ import net.minecraft.resources.Identifier;
 public final class DonutVisionClient implements ClientModInitializer {
     private static boolean espEnabled;
     private static boolean spawnerEspEnabled;
+    private static boolean crystalEspEnabled;
     private static boolean blockTracers = true;
     private static KeyMapping freecamKey;
     private static KeyMapping espKey;
@@ -43,6 +44,20 @@ public final class DonutVisionClient implements ClientModInitializer {
 
     public static void toggleSpawnerEsp() {
         setSpawnerEspEnabled(!spawnerEspEnabled);
+        ClientSettings.save();
+    }
+
+    public static boolean crystalEspEnabled() { return crystalEspEnabled; }
+
+    public static void setCrystalEspEnabled(boolean enabled) {
+        if (crystalEspEnabled != enabled) {
+            crystalEspEnabled = enabled;
+            BlockEsp.clear(); // Refresh crystal targets without changing other settings.
+        }
+    }
+
+    public static void toggleCrystalEsp() {
+        setCrystalEspEnabled(!crystalEspEnabled);
         ClientSettings.save();
     }
 
@@ -80,7 +95,7 @@ public final class DonutVisionClient implements ClientModInitializer {
         backupMenuKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.donutvision.menu_backup", InputConstants.Type.KEYSYM, InputConstants.KEY_F10, category));
 
-        System.out.println("[DonutVision] 1.7.0 client initializer loaded. Menu keys: Right Shift or F10.");
+        System.out.println("[DonutVision] 1.8.0 client initializer loaded. Menu keys: Right Shift or F10.");
         ClientSettings.load();
         EspOverlay.install();
         ClientTickEvents.END_CLIENT_TICK.register(this::tick);
@@ -101,7 +116,7 @@ public final class DonutVisionClient implements ClientModInitializer {
         }
         if (!welcomeShown) {
             welcomeShown = true;
-            notify(mc, "v1.7.0 loaded! RShift/F10 menu. Animated orange GUI and fast persistent Block ESP.");
+            notify(mc, "v1.8.0 loaded! Crystal Cluster ESP added (amethyst clusters).");
         }
         while (freecamKey.consumeClick()) {
             Freecam.toggle(mc);
@@ -122,7 +137,7 @@ public final class DonutVisionClient implements ClientModInitializer {
             notify(mc, "ESP radius: " + BlockEsp.rangeLabel(BlockEsp.radius()));
         }
         Freecam.tick(mc);
-        BlockEsp.tick(mc, espEnabled, spawnerEspEnabled);
+        BlockEsp.tick(mc, espEnabled, spawnerEspEnabled, crystalEspEnabled);
     }
 
     private static void notify(Minecraft mc, String text) {

@@ -37,6 +37,9 @@ public final class BlockEsp {
     private static final int MAX_VISIBLE_TARGETS = 2048;
     private static final int MAX_CACHED_TARGETS = 12000;
     private static final int MAX_SPAWNERS = 512;
+    private static final int MAX_CRYSTALS = 1024;
+    /** Pale violet for fully grown amethyst clusters. */
+    public static final int CRYSTAL_COLOR = 0xFFCB85FF;
     private static final int SECTIONS_PER_TICK = 48;
     private static final long SCAN_TIME_BUDGET_NS = 2_700_000L;
     private static final int SCAN_REFRESH_TICKS = 180;
@@ -66,10 +69,13 @@ public final class BlockEsp {
     private static int mode = 0; // 0 ores, 1 storage, 2 both, 3 storage+redstone, 4 all
     private static List<Target> matches = List.of();
     private static List<Target> spawnerMatches = List.of();
+    private static List<Target> crystalMatches = List.of();
     private static final Map<BlockPos, Target> cachedBlocks = new HashMap<>();
     private static final Map<BlockPos, Target> cachedSpawners = new HashMap<>();
+    private static final Map<BlockPos, Target> cachedCrystals = new HashMap<>();
     private static final Map<SectionPoint, Set<BlockPos>> blockSectionIndex = new HashMap<>();
     private static final Map<SectionPoint, Set<BlockPos>> spawnerSectionIndex = new HashMap<>();
+    private static final Map<SectionPoint, Set<BlockPos>> crystalSectionIndex = new HashMap<>();
     private static List<ChunkPoint> scanChunks = List.of();
     private static int[] sectionOrder = new int[0];
     private static int chunkIndex;
@@ -83,7 +89,7 @@ public final class BlockEsp {
     private static boolean scanning;
 
     private static final Predicate<BlockState> INTERESTING = state ->
-            colorFor(state.getBlock()) != 0 || isSpawner(state.getBlock());
+            colorFor(state.getBlock()) != 0 || isSpawner(state.getBlock()) || isCrystal(state.getBlock());
 
     private BlockEsp() { }
 
@@ -141,22 +147,26 @@ public final class BlockEsp {
         restartScan();
         cachedBlocks.clear();
         cachedSpawners.clear();
+        cachedCrystals.clear();
         blockSectionIndex.clear();
         spawnerSectionIndex.clear();
+        crystalSectionIndex.clear();
         matches = List.of();
         spawnerMatches = List.of();
+        crystalMatches = List.of();
         scanLevel = null;
         nearIndex = 0;
     }
 
-    public static void tick(Minecraft mc, boolean blockEnabled, boolean spawnerEnabled) {
+    public static void tick(Minecraft mc, boolean blockEnabled, boolean spawnerEnabled,
+                            boolean crystalEnabled) {
         if (mc.level == null || mc.player == null) {
             if (scanLevel != null) clear();
             return;
         }
         ClientLevel level = mc.level;
         if (scanLevel != null && scanLevel != level) clear();
-        if (!blockEnabled && !spawnerEnabled) return;
+        if (!blockEnabled && !spawnerEnabled && !crystalEnabled) return;
         scanLevel = level;
         Vec3 viewPosition = Freecam.active() ? Freecam.position() : mc.player.position();
         BlockPos center = BlockPos.containing(viewPosition);
@@ -167,9 +177,9 @@ public final class BlockEsp {
 
         // Check nearby changes each tick, independently from the distant section scan.
         // This also detects blocks placed into a section that was scanned seconds earlier.
-        scanNear(level, mc.player.blockPosition(), blockEnabled, spawnerEnabled);
+        scanNear(level, mc.player.blockPosition(), blockEnabled, spawnerEnabled, crystalEnabled);
         if (Freecam.active() && center.distSqr(mc.player.blockPosition()) > 36.0) {
-            scanNear(level, center, blockEnabled, spawnerEnabled);
+            scanNear(level, center, blockEnabled, spawnerEnabled, crystalEnabled);
         }
 
         if (!scanning && ++ticksSinceScan >= SCAN_REFRESH_TICKS) {
@@ -207,6 +217,7 @@ public final class BlockEsp {
             int baseZ = point.z() << 4;
             List<Target> foundBlocks = new ArrayList<>();
             List<Target> foundSpawners = new ArrayList<>();
+            List<Target> foundCrystals = new ArrayList<>();
 
             if (!section.hasOnlyAir() && section.maybeHas(INTERESTING)) {
                 for (int ly = 0; ly < 16; ly++) {
@@ -221,6 +232,8 @@ public final class BlockEsp {
                             Block block = section.getBlockState(lx, ly, lz).getBlock();
                             if (isSpawner(block)) {
                                 if (spawnerEnabled) foundSpawners.add(new Target(new BlockPos(x, y, z), spawnerColor(block)));
+                            } else if (isCrystal(block)) {
+                                if (crystalEnabled) foundCrystals.add(new Target(new BlockPos(x, y, z), CRYSTAL_COLOR));
                             } else if (blockEnabled) {
                                 int color = colorFor(block);
                                 if (color != 0) foundBlocks.add(new Target(new BlockPos(x, y, z), color));
@@ -232,16 +245,18 @@ public final class BlockEsp {
             // Atomic per-section replacement: never hide old results while a scan is in progress.
             if (blockEnabled) replaceSection(key, foundBlocks, cachedBlocks, blockSectionIndex, MAX_CACHED_TARGETS);
             if (spawnerEnabled) replaceSection(key, foundSpawners, cachedSpawners, spawnerSectionIndex, MAX_SPAWNERS * 3);
+            if (crystalEnabled) replaceSection(key, foundCrystals, cachedCrystals, crystalSectionIndex, MAX_CRYSTALS * 3);
         }
         if (++ticksSincePublish >= 2) {
             tickCounter++;
             if (tickCounter % 40 == 0) pruneUnloaded(level);
-            publish(center, blockEnabled, spawnerEnabled);
+            publish(center, blockEnabled, spawnerEnabled, crystalEnabled);
             ticksSincePublish = 0;
         }
     }
 
-    private static void scanNear(ClientLevel level, BlockPos center, boolean blocks, boolean spawners) {
+    private static void scanNear(ClientLevel level, BlockPos center, boolean blocks, boolean spawners,
+                                 boolean crystals) {
         long deadline = System.nanoTime() + NEAR_TIME_BUDGET_NS;
         int processed = 0;
         int lastX = Integer.MIN_VALUE, lastZ = Integer.MIN_VALUE;
@@ -264,6 +279,8 @@ public final class BlockEsp {
             if (blocks) updateSingle(pos, colorFor(block), cachedBlocks, blockSectionIndex, MAX_CACHED_TARGETS);
             if (spawners) updateSingle(pos, isSpawner(block) ? spawnerColor(block) : 0,
                     cachedSpawners, spawnerSectionIndex, MAX_SPAWNERS * 3);
+            if (crystals) updateSingle(pos, isCrystal(block) ? CRYSTAL_COLOR : 0,
+                    cachedCrystals, crystalSectionIndex, MAX_CRYSTALS * 3);
         }
     }
 
@@ -308,11 +325,13 @@ public final class BlockEsp {
         if (!current.isEmpty()) index.put(key, current);
     }
 
-    private static void publish(BlockPos center, boolean blocks, boolean spawners) {
+    private static void publish(BlockPos center, boolean blocks, boolean spawners, boolean crystals) {
         if (blocks) matches = visibleTargets(cachedBlocks, center, MAX_VISIBLE_TARGETS);
         else matches = List.of();
         if (spawners) spawnerMatches = visibleTargets(cachedSpawners, center, MAX_SPAWNERS);
         else spawnerMatches = List.of();
+        if (crystals) crystalMatches = visibleTargets(cachedCrystals, center, MAX_CRYSTALS);
+        else crystalMatches = List.of();
     }
 
     private static List<Target> visibleTargets(Map<BlockPos, Target> source, BlockPos center, int limit) {
@@ -376,9 +395,14 @@ public final class BlockEsp {
             if (level.getChunkSource().getChunk(key.x(), key.z(), ChunkStatus.FULL, false) == null
                     && !stale.contains(key)) stale.add(key);
         }
+        for (SectionPoint key : crystalSectionIndex.keySet()) {
+            if (level.getChunkSource().getChunk(key.x(), key.z(), ChunkStatus.FULL, false) == null
+                    && !stale.contains(key)) stale.add(key);
+        }
         for (SectionPoint key : stale) {
             dropSection(key, cachedBlocks, blockSectionIndex);
             dropSection(key, cachedSpawners, spawnerSectionIndex);
+            dropSection(key, cachedCrystals, crystalSectionIndex);
         }
     }
 
@@ -388,9 +412,12 @@ public final class BlockEsp {
             if (key.x() == x && key.z() == z) stale.add(key);
         for (SectionPoint key : spawnerSectionIndex.keySet())
             if (key.x() == x && key.z() == z && !stale.contains(key)) stale.add(key);
+        for (SectionPoint key : crystalSectionIndex.keySet())
+            if (key.x() == x && key.z() == z && !stale.contains(key)) stale.add(key);
         for (SectionPoint key : stale) {
             dropSection(key, cachedBlocks, blockSectionIndex);
             dropSection(key, cachedSpawners, spawnerSectionIndex);
+            dropSection(key, cachedCrystals, crystalSectionIndex);
         }
     }
 
@@ -400,6 +427,10 @@ public final class BlockEsp {
         if (removed != null) for (BlockPos pos : removed) cache.remove(pos);
     }
 
+    private static boolean isCrystal(Block block) {
+        // Full-grown amethyst clusters only; small/medium/large buds are excluded.
+        return block == Blocks.AMETHYST_CLUSTER;
+    }
     private static boolean isSpawner(Block block) {
         return block == Blocks.SPAWNER || block == Blocks.TRIAL_SPAWNER;
     }
@@ -434,4 +465,5 @@ public final class BlockEsp {
 
     static List<Target> targets() { return matches; }
     static List<Target> spawnerTargets() { return spawnerMatches; }
+    static List<Target> crystalTargets() { return crystalMatches; }
 }

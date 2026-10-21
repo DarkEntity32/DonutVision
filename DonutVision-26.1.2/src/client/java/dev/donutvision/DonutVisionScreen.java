@@ -113,7 +113,9 @@ public final class DonutVisionScreen extends Screen {
                         DonutVisionClient::blockTracers, DonutVisionClient::toggleBlockTracers);
                 toggle("Player tracers", "Lines to players", x2, startY + 124,
                         PlayerEsp::tracers, PlayerEsp::toggleTracers);
-                contentBottom = startY + 260;
+                toggle("Crystal Cluster ESP", "Amethyst crystal clusters", x1, startY + 186,
+                        DonutVisionClient::crystalEspEnabled, DonutVisionClient::toggleCrystalEsp);
+                contentBottom = startY + 330;
             }
             case FILTERS -> {
                 BlockEsp.Filter[] filters = BlockEsp.Filter.values();
@@ -152,7 +154,7 @@ public final class DonutVisionScreen extends Screen {
                         value -> Freecam.setSpeed(0.2 + value * 1.3));
                 contentBottom = startY + 338;
             }
-            case COLORS -> contentBottom = startY + 342;
+            case COLORS -> contentBottom = startY + 389;
         }
     }
 
@@ -208,7 +210,7 @@ public final class DonutVisionScreen extends Screen {
         g.fill(left + 16, top + 1, left + 21, top + 52, 0x55FF8A25);
         g.text(font, "DONUT", left + 30, top + 18, TEXT, true);
         g.text(font, "VISION", left + 66, top + 18, ORANGE_BRIGHT, true);
-        g.text(font, "v1.7.0  //  RSHIFT + F10", left + panelWidth - 167, top + 18, DIM, false);
+        g.text(font, "v1.8.0  //  RSHIFT + F10", left + panelWidth - 167, top + 18, DIM, false);
 
         double pulse = (Math.sin(now / 1_000_000_000.0 * 2.5) + 1.0) / 2.0;
         int pulseW = 18 + (int)(pulse * 18);
@@ -281,7 +283,7 @@ public final class DonutVisionScreen extends Screen {
             }
         }
         if (page == Page.MODULES) {
-            int y = top + 345;
+            int y = top + 405;
             rounded(g, left + 17, y, panelWidth - 42, 49, 5, CARD);
             g.text(font, "TRACKED BLOCKS", left + 28, y + 11, DIM, false);
             g.text(font, Integer.toString(BlockEsp.targets().size()), left + 28, y + 29, ORANGE_BRIGHT, true);
@@ -342,11 +344,11 @@ public final class DonutVisionScreen extends Screen {
         String[] names = {"Chest", "Trapped chest", "Shulker box", "Hopper",
                 "Barrel", "Ender chest", "Redstone block", "Dispenser / dropper",
                 "Furnaces", "Diamonds", "Spawner", "Trial spawner",
-                "Ancient debris", "Gold ore", "Emerald ore", "Players"};
+                "Ancient debris", "Gold ore", "Emerald ore", "Players", "Crystal clusters"};
         int[] colors = {0xFFE8CBA5, 0xFFE5A985, 0xFFFF8CCF, 0xFF9AA4B2,
                 0xFFCB9B6C, 0xFFA996FF, 0xFFFF485F, 0xFF86A8C0,
                 0xFF80A5A2, 0xFF35DEFF, 0xFFFF4A56, 0xFFFFBD43,
-                0xFFFF943E, 0xFFFFD46B, 0xFF4FFFA0, 0xFF72FFAD};
+                0xFFFF943E, 0xFFFFD46B, 0xFF4FFFA0, 0xFF72FFAD, BlockEsp.CRYSTAL_COLOR};
         for (int i = 0; i < names.length; i++) {
             int x = left + 17 + (i % 2) * (colWidth + 8);
             int y = top + 151 + (i / 2) * 39;
