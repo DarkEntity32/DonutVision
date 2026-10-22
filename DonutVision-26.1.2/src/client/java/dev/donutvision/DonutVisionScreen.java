@@ -14,7 +14,7 @@ import java.util.function.Supplier;
 
 /** Black/orange animated GUI with entirely custom-drawn controls and MacBook trackpad support. */
 public final class DonutVisionScreen extends Screen {
-    private enum Page { MODULES, FILTERS, SETTINGS, COLORS }
+    private enum Page { MODULES, FILTERS, SETTINGS, COLORS, BASES }
     private enum Kind { TOGGLE, ACTION, SLIDER }
 
     private static final int BACKDROP = 0xF409090C;
@@ -89,7 +89,7 @@ public final class DonutVisionScreen extends Screen {
     private int viewportBottom() { return top + panelHeight - 54; }
     private int scrollBarX() { return left + panelWidth - 14; }
     private double maxScroll() { return Math.max(0, contentBottom - viewportBottom() + 12.0); }
-    private int tabWidth() { return Math.max(40, (panelWidth - 43) / 4); }
+    private int tabWidth() { return Math.max(38, (panelWidth - 43) / Page.values().length - 1); }
     private int tabX(int index) { return left + 14 + index * (tabWidth() + 5); }
 
     private void buildControls() {
@@ -115,7 +115,11 @@ public final class DonutVisionScreen extends Screen {
                         PlayerEsp::tracers, PlayerEsp::toggleTracers);
                 toggle("Crystal Cluster ESP", "Amethyst crystal clusters", x1, startY + 186,
                         DonutVisionClient::crystalEspEnabled, DonutVisionClient::toggleCrystalEsp);
-                contentBottom = startY + 330;
+                toggle("Base Finder", "Locate suspicious chunks", x2, startY + 186,
+                        BaseFinder::enabled, BaseFinder::toggle);
+                toggle("Base tracers", "Lines to possible bases", x1, startY + 248,
+                        BaseFinder::tracers, BaseFinder::toggleTracers);
+                contentBottom = startY + 370;
             }
             case FILTERS -> {
                 BlockEsp.Filter[] filters = BlockEsp.Filter.values();
@@ -155,6 +159,20 @@ public final class DonutVisionScreen extends Screen {
                 contentBottom = startY + 338;
             }
             case COLORS -> contentBottom = startY + 389;
+            case BASES -> {
+                slider("Base scan range", "Loaded chunks only", x1, startY, panelWidth - 42,
+                        () -> BaseFinder.radiusStepIndex() / (double)(BaseFinder.radiusSteps() - 1),
+                        value -> BaseFinder.setRadiusStep((int)Math.round(value * (BaseFinder.radiusSteps() - 1))));
+                slider("Minimum base score", "12 (more results) - 72 (stricter)",
+                        x1, startY + 91, panelWidth - 42,
+                        () -> (BaseFinder.minScore() - 12) / 60.0,
+                        value -> BaseFinder.setMinScore(12 + (int)Math.round(60 * value)));
+                toggle("Base alerts", "Notify on strong signals", x1, startY + 188,
+                        BaseFinder::alerts, BaseFinder::toggleAlerts);
+                action(() -> "Clear detected sites", "Reset finds and scan again", x2,
+                        startY + 188, colWidth, BaseFinder::clear);
+                contentBottom = startY + 330 + 36 * 8;
+            }
         }
     }
 
@@ -247,6 +265,7 @@ public final class DonutVisionScreen extends Screen {
                 case FILTERS -> "Filters";
                 case SETTINGS -> "Settings";
                 case COLORS -> "Colors";
+                case BASES -> "Bases";
             };
             int tw = font.width(label);
             g.text(font, label, tx + (tabWidth() - tw) / 2, top + 74,
@@ -262,12 +281,14 @@ public final class DonutVisionScreen extends Screen {
             case FILTERS -> "TARGET FILTERS";
             case SETTINGS -> "RANGE & MOVEMENT";
             case COLORS -> "TRACER PALETTE";
+            case BASES -> "BASE FINDER";
         };
         String subtitle = switch (page) {
             case MODULES -> "Real-time toggles  /  animated switches";
             case FILTERS -> "Select which targets to highlight";
             case SETTINGS -> "Custom ranges and movement speed";
             case COLORS -> "Each target keeps its own tracer color";
+            case BASES -> "Client-loaded chunks / heuristic signals";
         };
         g.text(font, heading, left + 18, top + 115, blend(DIM, ORANGE_BRIGHT, intro), true);
         g.text(font, subtitle, left + 18, top + 129, DIM, false);
@@ -282,8 +303,10 @@ public final class DonutVisionScreen extends Screen {
                 case SLIDER -> drawSlider(g, control);
             }
         }
-        if (page == Page.MODULES) {
-            int y = top + 405;
+        if (page == Page.BASES) {
+            drawBaseFinds(g);
+        } else if (page == Page.MODULES) {
+            int y = top + 467;
             rounded(g, left + 17, y, panelWidth - 42, 49, 5, CARD);
             g.text(font, "TRACKED BLOCKS", left + 28, y + 11, DIM, false);
             g.text(font, Integer.toString(BlockEsp.targets().size()), left + 28, y + 29, ORANGE_BRIGHT, true);
@@ -293,6 +316,28 @@ public final class DonutVisionScreen extends Screen {
             rounded(g, left + 17, top + 425, panelWidth - 42, 42, 5, CARD);
             g.text(font, "Infinity = client-loaded chunks only", left + 29, top + 440, TEXT, false);
             g.text(font, "All changes are saved when closing the menu", left + 29, top + 454, DIM, false);
+        }
+    }
+
+    private void drawBaseFinds(GuiGraphicsExtractor g) {
+        int y = top + 448;
+        g.text(font, "DETECTED  " + BaseFinder.sites().size() + "   |   Scanned chunks  "
+                + BaseFinder.scannedChunks(), left + 19, y, ORANGE_BRIGHT, true);
+        y += 22;
+        if (BaseFinder.sites().isEmpty()) {
+            g.text(font, BaseFinder.enabled() ? "Scanning... No strong signals yet" : "Enable Base Finder in Modules",
+                    left + 19, y, DIM, false);
+            return;
+        }
+        int count = 0;
+        for (BaseFinder.Site site : BaseFinder.sites()) {
+            if (count++ >= 8) break;
+            rounded(g, left + 17, y - 4, panelWidth - 42, 30, 4, CARD);
+            String coords = site.pos().getX() + ", " + site.pos().getY() + ", " + site.pos().getZ();
+            g.text(font, site.label() + "  (" + site.score() + ")", left + 26, y + 1,
+                    site.color(), true);
+            g.text(font, coords, left + 26, y + 15, DIM, false);
+            y += 36;
         }
     }
 
@@ -328,6 +373,8 @@ public final class DonutVisionScreen extends Screen {
         String reading = switch (c.label) {
             case "Block ESP range" -> BlockEsp.rangeLabel(BlockEsp.radius());
             case "Player ESP range" -> BlockEsp.rangeLabel(PlayerEsp.radius());
+            case "Base scan range" -> BaseFinder.radiusLabel();
+            case "Minimum base score" -> Integer.toString(BaseFinder.minScore());
             default -> String.format(Locale.ROOT, "%.2f", Freecam.speed());
         };
         g.text(font, reading, c.x + c.w - 14 - font.width(reading), c.y + 14, ORANGE_BRIGHT, true);

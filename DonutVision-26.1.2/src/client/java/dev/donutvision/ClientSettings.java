@@ -30,6 +30,11 @@ public final class ClientSettings {
             PlayerEsp.setRadius(parseInt(data.getProperty("playerRadius"), BlockEsp.UNLIMITED));
             BlockEsp.setMode(parseInt(data.getProperty("mode"), 0));
             Freecam.setSpeed(parseDouble(data.getProperty("speed"), 0.42));
+            BaseFinder.setRadius(parseInt(data.getProperty("baseRange"), 192));
+            BaseFinder.setMinScore(parseInt(data.getProperty("baseMinScore"), 24));
+            BaseFinder.setTracers(Boolean.parseBoolean(data.getProperty("baseTracers", "true")));
+            BaseFinder.setAlerts(Boolean.parseBoolean(data.getProperty("baseAlerts", "true")));
+            BaseFinder.setEnabled(Boolean.parseBoolean(data.getProperty("baseFinder", "false")));
             for (BlockEsp.Filter filter : BlockEsp.Filter.values()) {
                 BlockEsp.setFilter(filter, Boolean.parseBoolean(data.getProperty("block." + filter.name(), "true")));
             }
@@ -50,6 +55,11 @@ public final class ClientSettings {
         data.setProperty("playerRadius", Integer.toString(PlayerEsp.radius()));
         data.setProperty("mode", Integer.toString(BlockEsp.mode()));
         data.setProperty("speed", Double.toString(Freecam.speed()));
+        data.setProperty("baseFinder", Boolean.toString(BaseFinder.enabled()));
+        data.setProperty("baseTracers", Boolean.toString(BaseFinder.tracers()));
+        data.setProperty("baseAlerts", Boolean.toString(BaseFinder.alerts()));
+        data.setProperty("baseRange", Integer.toString(BaseFinder.radius()));
+        data.setProperty("baseMinScore", Integer.toString(BaseFinder.minScore()));
         for (BlockEsp.Filter filter : BlockEsp.Filter.values()) {
             data.setProperty("block." + filter.name(), Boolean.toString(BlockEsp.filterEnabled(filter)));
         }

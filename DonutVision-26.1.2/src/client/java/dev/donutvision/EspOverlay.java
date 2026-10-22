@@ -95,6 +95,15 @@ public final class EspOverlay {
                         target.color(), DonutVisionClient.blockTracers()));
             }
         }
+        if (BaseFinder.enabled()) {
+            // Mark the approximate center of suspicious loaded chunks.
+            // Coordinates are heuristic: they are not proof of a player base.
+            for (BaseFinder.Site site : BaseFinder.sites()) {
+                double x = site.pos().getX(), y = site.pos().getY(), z = site.pos().getZ();
+                boxes.add(new Box(x - 1.5, y, z - 1.5, x + 1.5, y + 3.0, z + 1.5,
+                        site.color(), BaseFinder.tracers()));
+            }
+        }
         if (PlayerEsp.enabled()) {
             // This list consists only of players already known to the client.
             for (AbstractClientPlayer player : mc.level.players()) {
