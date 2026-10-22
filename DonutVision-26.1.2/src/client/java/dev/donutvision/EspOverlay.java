@@ -101,7 +101,7 @@ public final class EspOverlay {
             for (BaseFinder.Site site : BaseFinder.sites()) {
                 double x = site.pos().getX(), y = site.pos().getY(), z = site.pos().getZ();
                 boxes.add(new Box(x - 1.5, y, z - 1.5, x + 1.5, y + 3.0, z + 1.5,
-                        site.color(), BaseFinder.tracers()));
+                        site.color(), false));
             }
         }
         if (PlayerEsp.enabled()) {

@@ -32,6 +32,8 @@ public final class ClientSettings {
             Freecam.setSpeed(parseDouble(data.getProperty("speed"), 0.42));
             BaseFinder.setRadius(parseInt(data.getProperty("baseRange"), 192));
             BaseFinder.setMinScore(parseInt(data.getProperty("baseMinScore"), 24));
+            BaseFinder.setYRange(parseInt(data.getProperty("baseMinY"), -64),
+                    parseInt(data.getProperty("baseMaxY"), 0));
             BaseFinder.setTracers(Boolean.parseBoolean(data.getProperty("baseTracers", "true")));
             BaseFinder.setAlerts(Boolean.parseBoolean(data.getProperty("baseAlerts", "true")));
             BaseFinder.setEnabled(Boolean.parseBoolean(data.getProperty("baseFinder", "false")));
@@ -60,6 +62,8 @@ public final class ClientSettings {
         data.setProperty("baseAlerts", Boolean.toString(BaseFinder.alerts()));
         data.setProperty("baseRange", Integer.toString(BaseFinder.radius()));
         data.setProperty("baseMinScore", Integer.toString(BaseFinder.minScore()));
+        data.setProperty("baseMinY", Integer.toString(BaseFinder.minY()));
+        data.setProperty("baseMaxY", Integer.toString(BaseFinder.maxY()));
         for (BlockEsp.Filter filter : BlockEsp.Filter.values()) {
             data.setProperty("block." + filter.name(), Boolean.toString(BlockEsp.filterEnabled(filter)));
         }

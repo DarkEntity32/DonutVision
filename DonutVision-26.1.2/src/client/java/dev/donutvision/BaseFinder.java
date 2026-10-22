@@ -13,7 +13,6 @@ import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -35,6 +34,10 @@ public final class BaseFinder {
     private static final long BUDGET_NS = 1_700_000L;
     private static final int REFRESH_TICKS = 120;
     private static final int MAX_SITES = 36;
+    // Vanilla overworld build range. Values are inclusive; the UI allows either limit.
+    public static final int Y_SLIDER_MIN = -64;
+    public static final int Y_SLIDER_MAX = 320;
+    private static final int OUTLINE_RED = 0xFFFF3535;
     private static final int[] RANGES = {64, 96, 128, 192, 256, 384, 512, BlockEsp.UNLIMITED};
 
     public record Site(BlockPos pos, int score, int storages, int utilities, int devices,
@@ -67,10 +70,12 @@ public final class BaseFinder {
     }
 
     private static boolean enabled;
-    private static boolean tracers = true;
+    private static boolean tracers = false;
     private static boolean alerts = true;
     private static int radius = 192;
     private static int minScore = 24;
+    private static int minY = -64;
+    private static int maxY = 0;
     private static ClientLevel currentLevel;
     private static final Map<ChunkKey, Snapshot> snapshots = new HashMap<>();
     private static final Set<ChunkKey> alertedChunks = new HashSet<>();
@@ -94,9 +99,10 @@ public final class BaseFinder {
         }
     }
     public static void toggle() { setEnabled(!enabled); ClientSettings.save(); }
-    public static boolean tracers() { return tracers; }
-    public static void setTracers(boolean value) { tracers = value; }
-    public static void toggleTracers() { tracers = !tracers; ClientSettings.save(); }
+    // Base markers are red outlines only (no tracer lines).
+    public static boolean tracers() { return false; }
+    public static void setTracers(boolean ignored) { tracers = false; }
+    public static void toggleTracers() { tracers = false; ClientSettings.save(); }
     public static boolean alerts() { return alerts; }
     public static void setAlerts(boolean value) { alerts = value; }
     public static void toggleAlerts() { alerts = !alerts; ClientSettings.save(); }
@@ -112,6 +118,26 @@ public final class BaseFinder {
         restart();
     }
     public static String radiusLabel() { return radius == BlockEsp.UNLIMITED ? "infinity" : radius + " blocks"; }
+    public static int minY() { return minY; }
+    public static int maxY() { return maxY; }
+    public static void setMinY(int value) { setYRange(value, maxY); }
+    public static void setMaxY(int value) { setYRange(minY, value); }
+    /** Inclusive Y boundaries. A handle never crosses the other handle. */
+    public static void setYRange(int from, int to) {
+        int low = Math.max(Y_SLIDER_MIN, Math.min(Y_SLIDER_MAX, from));
+        int high = Math.max(Y_SLIDER_MIN, Math.min(Y_SLIDER_MAX, to));
+        if (low > high) {
+            // Keep the bound being adjusted inside the existing interval.
+            if (from != minY && to == maxY) low = high;
+            else if (to != maxY && from == minY) high = low;
+            else { int swap = low; low = high; high = swap; }
+        }
+        if (minY == low && maxY == high) return;
+        minY = low;
+        maxY = high;
+        // Scores and positions depend on Y. Never reuse old-range snapshots/alerts.
+        clear();
+    }
     public static int minScore() { return minScore; }
     public static void setMinScore(int value) {
         minScore = Math.max(12, Math.min(72, value));
@@ -186,10 +212,15 @@ public final class BaseFinder {
             int originX = key.x << 4;
             int originY = level.getSectionYFromSectionIndex(index) << 4;
             int originZ = key.z << 4;
-            for (int y = 0; y < 16; y++) for (int x = 0; x < 16; x++) for (int z = 0; z < 16; z++) {
-                int category = category(section.getBlockState(x, y, z).getBlock());
-                if (category >= 0) partial.add(originX + x, originY + y, originZ + z, category);
-            }
+            // Discard sections completely outside the selected band.
+            if (originY + 15 < minY || originY > maxY) continue;
+            int localStart = Math.max(0, minY - originY);
+            int localEnd = Math.min(15, maxY - originY);
+            for (int y = localStart; y <= localEnd; y++)
+                for (int x = 0; x < 16; x++) for (int z = 0; z < 16; z++) {
+                    int category = category(section.getBlockState(x, y, z).getBlock());
+                    if (category >= 0) partial.add(originX + x, originY + y, originZ + z, category);
+                }
         }
         if (changed || mc.player.tickCount % 20 == 0) publish(level, center);
     }
@@ -218,12 +249,16 @@ public final class BaseFinder {
         available.sort(Comparator.comparingLong(k ->
                 (long)(k.x - centerX) * (k.x - centerX) + (long)(k.z - centerZ) * (k.z - centerZ)));
         scanChunks = List.copyOf(available);
-        Integer[] sectionOrder = new Integer[level.getSectionsCount()];
-        for (int i = 0; i < sectionOrder.length; i++) sectionOrder[i] = i;
-        Arrays.sort(sectionOrder, Comparator.comparingInt(i ->
+        // Only traverse sections intersecting the inclusive user-selected Y interval.
+        ArrayList<Integer> sectionOrder = new ArrayList<>();
+        for (int i = 0; i < level.getSectionsCount(); i++) {
+            int sectionY = level.getSectionYFromSectionIndex(i) << 4;
+            if (sectionY <= maxY && sectionY + 15 >= minY) sectionOrder.add(i);
+        }
+        sectionOrder.sort(Comparator.comparingInt(i ->
                 Math.abs((level.getSectionYFromSectionIndex(i) << 4) + 8 - center.getY())));
-        order = new int[sectionOrder.length];
-        for (int i = 0; i < order.length; i++) order[i] = sectionOrder[i];
+        order = new int[sectionOrder.size()];
+        for (int i = 0; i < order.length; i++) order[i] = sectionOrder.get(i);
         scanning = !scanChunks.isEmpty();
     }
 
@@ -245,10 +280,8 @@ public final class BaseFinder {
             String label = s.count(STORAGE) >= 4 && s.count(UTILITY) == 0 ? "Storage stash"
                     : s.count(MECHANISM) >= 4 ? "Redstone build"
                     : s.count(SPECIAL) > 0 ? "Advanced base" : "Possible base";
-            int color = label.equals("Storage stash") ? 0xFFD39AFF
-                    : label.equals("Redstone build") ? 0xFF64DEFF : 0xFFFF9B32;
             candidates.add(new Site(new BlockPos(x,y,z), score, s.count(STORAGE),
-                    s.count(UTILITY) + s.count(BED), s.count(MECHANISM), label, color));
+                    s.count(UTILITY) + s.count(BED), s.count(MECHANISM), label, OUTLINE_RED));
         }
         candidates.sort(Comparator.comparingInt(Site::score).reversed());
         ArrayList<Site> result = new ArrayList<>();
