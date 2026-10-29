@@ -11,6 +11,7 @@ import net.minecraft.world.level.block.ShulkerBoxBlock;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
+import net.minecraft.world.phys.AABB;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -41,20 +42,33 @@ public final class BaseFinder {
     private static final int[] RANGES = {64, 96, 128, 192, 256, 384, 512, BlockEsp.UNLIMITED};
 
     public record Site(BlockPos pos, int score, int storages, int utilities, int devices,
-                       String label, int color) { }
+                       String label, int color, AABB region) {
+        public String confidence() { return confidenceLabel(score); }
+    }
+
+    /** These are heuristics, never verified server-side base detections. */
+    public static String confidenceLabel(int score) {
+        return score >= Math.max(56, minScore + 20) ? "Most Likely Base" : "Maybe Base";
+    }
 
     private static final class Snapshot {
         final int[] counts = new int[CATEGORY_COUNT];
         long sx, sy, sz;
         int samples;
+        int lowestY = Integer.MAX_VALUE;
+        int highestY = Integer.MIN_VALUE;
         void add(int x, int y, int z, int type) {
             counts[type]++;
             sx += x; sy += y; sz += z;
+            lowestY = Math.min(lowestY, y);
+            highestY = Math.max(highestY, y);
             samples++;
         }
         void merge(Snapshot other) {
             for (int i = 0; i < CATEGORY_COUNT; i++) counts[i] += other.counts[i];
             sx += other.sx; sy += other.sy; sz += other.sz;
+            lowestY = Math.min(lowestY, other.lowestY);
+            highestY = Math.max(highestY, other.highestY);
             samples += other.samples;
         }
         int count(int type) { return counts[type]; }
@@ -280,8 +294,22 @@ public final class BaseFinder {
             String label = s.count(STORAGE) >= 4 && s.count(UTILITY) == 0 ? "Storage stash"
                     : s.count(MECHANISM) >= 4 ? "Redstone build"
                     : s.count(SPECIAL) > 0 ? "Advanced base" : "Possible base";
+            // Each site is framed by a large cube around its chunk, centred on the
+            // actual vertical band of observed evidence (not the world's surface).
+            // Keep the box within the user's Y-from / Y-to filter.
+            int chunkX = key.x << 4, chunkZ = key.z << 4;
+            int minBoxY = Math.max(minY, Math.min(s.lowestY - 3, y - 8));
+            int maxBoxY = Math.min(maxY + 1, Math.max(s.highestY + 4, minBoxY + 16));
+            // Avoid enormous shafts when scattered signals occupy many heights.
+            if (maxBoxY - minBoxY > 32) {
+                minBoxY = Math.max(minY, y - 16);
+                maxBoxY = Math.min(maxY + 1, y + 16);
+            }
+            if (maxBoxY <= minBoxY) maxBoxY = minBoxY + 1;
+            AABB region = new AABB(chunkX - 2, minBoxY, chunkZ - 2,
+                    chunkX + 18, maxBoxY, chunkZ + 18);
             candidates.add(new Site(new BlockPos(x,y,z), score, s.count(STORAGE),
-                    s.count(UTILITY) + s.count(BED), s.count(MECHANISM), label, OUTLINE_RED));
+                    s.count(UTILITY) + s.count(BED), s.count(MECHANISM), label, OUTLINE_RED, region));
         }
         candidates.sort(Comparator.comparingInt(Site::score).reversed());
         ArrayList<Site> result = new ArrayList<>();

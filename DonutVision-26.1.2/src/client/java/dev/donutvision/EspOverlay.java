@@ -96,12 +96,11 @@ public final class EspOverlay {
             }
         }
         if (BaseFinder.enabled()) {
-            // Mark the approximate center of suspicious loaded chunks.
-            // Coordinates are heuristic: they are not proof of a player base.
+            // Big red chunk-region boxes: never a claim of verified player bases.
             for (BaseFinder.Site site : BaseFinder.sites()) {
-                double x = site.pos().getX(), y = site.pos().getY(), z = site.pos().getZ();
-                boxes.add(new Box(x - 1.5, y, z - 1.5, x + 1.5, y + 3.0, z + 1.5,
-                        site.color(), false));
+                AABB region = site.region();
+                boxes.add(new Box(region.minX, region.minY, region.minZ,
+                        region.maxX, region.maxY, region.maxZ, site.color(), false));
             }
         }
         if (PlayerEsp.enabled()) {

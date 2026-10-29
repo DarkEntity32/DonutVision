@@ -236,7 +236,7 @@ public final class DonutVisionScreen extends Screen {
         g.fill(left + 16, top + 1, left + 21, top + 52, 0x55FF8A25);
         g.text(font, "DONUT", left + 30, top + 18, TEXT, true);
         g.text(font, "VISION", left + 66, top + 18, ORANGE_BRIGHT, true);
-        g.text(font, "v1.9.1  //  RSHIFT + F10", left + panelWidth - 167, top + 18, DIM, false);
+        g.text(font, "v1.9.2  //  RSHIFT + F10", left + panelWidth - 167, top + 18, DIM, false);
 
         double pulse = (Math.sin(now / 1_000_000_000.0 * 2.5) + 1.0) / 2.0;
         int pulseW = 18 + (int)(pulse * 18);
@@ -296,7 +296,7 @@ public final class DonutVisionScreen extends Screen {
             case FILTERS -> "Select which targets to highlight";
             case SETTINGS -> "Custom ranges and movement speed";
             case COLORS -> "Each target keeps its own tracer color";
-            case BASES -> "Y from / Y to: inclusive height filter; red outlines only";
+            case BASES -> "Y from / Y to: big red cubes; aim to inspect confidence";
         };
         g.text(font, heading, left + 18, top + 115, blend(DIM, ORANGE_BRIGHT, intro), true);
         g.text(font, subtitle, left + 18, top + 129, DIM, false);
@@ -342,7 +342,7 @@ public final class DonutVisionScreen extends Screen {
             if (count++ >= 8) break;
             rounded(g, left + 17, y - 4, panelWidth - 42, 30, 4, CARD);
             String coords = site.pos().getX() + ", " + site.pos().getY() + ", " + site.pos().getZ();
-            g.text(font, site.label() + "  (" + site.score() + ")", left + 26, y + 1,
+            g.text(font, site.confidence() + "  (score " + site.score() + ")", left + 26, y + 1,
                     site.color(), true);
             g.text(font, coords, left + 26, y + 15, DIM, false);
             y += 36;

@@ -95,9 +95,10 @@ public final class DonutVisionClient implements ClientModInitializer {
         backupMenuKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.donutvision.menu_backup", InputConstants.Type.KEYSYM, InputConstants.KEY_F10, category));
 
-        System.out.println("[DonutVision] 1.9.0 client initializer loaded. Menu keys: Right Shift or F10.");
+        System.out.println("[DonutVision] 1.9.2 client initializer loaded. Menu keys: Right Shift or F10.");
         ClientSettings.load();
         EspOverlay.install();
+        BaseFinderHud.install();
         ClientTickEvents.END_CLIENT_TICK.register(this::tick);
     }
 
@@ -117,7 +118,7 @@ public final class DonutVisionClient implements ClientModInitializer {
         }
         if (!welcomeShown) {
             welcomeShown = true;
-            notify(mc, "v1.9.0 loaded! Base Finder: Modules / Bases tab.");
+            notify(mc, "v1.9.2 loaded! Base Finder: Modules / Bases tab.");
         }
         while (freecamKey.consumeClick()) {
             Freecam.toggle(mc);
