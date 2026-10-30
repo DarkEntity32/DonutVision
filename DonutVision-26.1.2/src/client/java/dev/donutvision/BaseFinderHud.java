@@ -12,7 +12,8 @@ public final class BaseFinderHud {
     private static final int RED = 0xFFFF3535;
     private static final int WHITE = 0xFFF9F2EE;
     private static final int DARK = 0xE6101014;
-    private static final double MAX_HOVER_DISTANCE = 256.0;
+    // Match the farthest supported Base Finder range (512 blocks) with margin.
+    private static final double MAX_HOVER_DISTANCE = 768.0;
 
     private BaseFinderHud() { }
 

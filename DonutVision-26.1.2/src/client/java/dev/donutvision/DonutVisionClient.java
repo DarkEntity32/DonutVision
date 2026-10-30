@@ -118,7 +118,7 @@ public final class DonutVisionClient implements ClientModInitializer {
         }
         if (!welcomeShown) {
             welcomeShown = true;
-            notify(mc, "v1.9.2 loaded! Base Finder: Modules / Bases tab.");
+            notify(mc, "v1.9.3 loaded! Base Finder: Modules / Bases tab.");
         }
         while (freecamKey.consumeClick()) {
             Freecam.toggle(mc);

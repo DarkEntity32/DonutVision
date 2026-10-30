@@ -131,7 +131,7 @@ public final class BaseFinder {
         radius = range == BlockEsp.UNLIMITED ? range : Math.max(64, Math.min(512, range));
         restart();
     }
-    public static String radiusLabel() { return radius == BlockEsp.UNLIMITED ? "infinity" : radius + " blocks"; }
+    public static String radiusLabel() { return radius == BlockEsp.UNLIMITED ? "all loaded chunks" : radius + " blocks"; }
     public static int minY() { return minY; }
     public static int maxY() { return maxY; }
     public static void setMinY(int value) { setYRange(value, maxY); }
@@ -153,8 +153,20 @@ public final class BaseFinder {
         clear();
     }
     public static int minScore() { return minScore; }
+    /** Higher sensitivity allows MORE possible bases; it never changes scan distance. */
+    public static int sensitivity() {
+        return Math.round((72 - minScore) * 100.0f / 60.0f);
+    }
+    public static void setSensitivity(int percent) {
+        int clamped = Math.max(0, Math.min(100, percent));
+        setMinScore(72 - Math.round(clamped * 60.0f / 100.0f));
+    }
+    /** Kept for compatibility with existing donutvision.properties settings files. */
     public static void setMinScore(int value) {
-        minScore = Math.max(12, Math.min(72, value));
+        int next = Math.max(12, Math.min(72, value));
+        if (minScore == next) return;
+        minScore = next;
+        // Re-filter existing cached chunks immediately. No rescan needed.
         if (enabled && currentLevel != null) publish(currentLevel, scanCenter);
     }
     public static List<Site> sites() { return sites; }

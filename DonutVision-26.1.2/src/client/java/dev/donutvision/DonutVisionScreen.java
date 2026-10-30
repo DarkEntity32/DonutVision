@@ -158,7 +158,7 @@ public final class DonutVisionScreen extends Screen {
             }
             case COLORS -> contentBottom = startY + 389;
             case BASES -> {
-                slider("Base scan range", "Loaded chunks only", x1, startY, panelWidth - 42,
+                slider("Base scan distance", "Farther = more loaded chunks", x1, startY, panelWidth - 42,
                         () -> BaseFinder.radiusStepIndex() / (double)(BaseFinder.radiusSteps() - 1),
                         value -> BaseFinder.setRadiusStep((int)Math.round(value * (BaseFinder.radiusSteps() - 1))));
                 slider("Y from", "Lower Y boundary (inclusive)", x1, startY + 91, panelWidth - 42,
@@ -171,10 +171,10 @@ public final class DonutVisionScreen extends Screen {
                                 / (double)(BaseFinder.Y_SLIDER_MAX - BaseFinder.Y_SLIDER_MIN),
                         value -> BaseFinder.setMaxY(BaseFinder.Y_SLIDER_MIN + (int)Math.round(value
                                 * (BaseFinder.Y_SLIDER_MAX - BaseFinder.Y_SLIDER_MIN))));
-                slider("Minimum base score", "12 (more results) - 72 (stricter)",
+                slider("Base sensitivity", "Higher = MORE possible bases (independent of distance)",
                         x1, startY + 273, panelWidth - 42,
-                        () -> (BaseFinder.minScore() - 12) / 60.0,
-                        value -> BaseFinder.setMinScore(12 + (int)Math.round(60 * value)));
+                        () -> BaseFinder.sensitivity() / 100.0,
+                        value -> BaseFinder.setSensitivity((int)Math.round(100 * value)));
                 toggle("Base alerts", "Notify on strong signals", x1, startY + 370,
                         BaseFinder::alerts, BaseFinder::toggleAlerts);
                 action(() -> "Clear detected sites", "Reset finds and scan again", x2,
@@ -236,7 +236,7 @@ public final class DonutVisionScreen extends Screen {
         g.fill(left + 16, top + 1, left + 21, top + 52, 0x55FF8A25);
         g.text(font, "DONUT", left + 30, top + 18, TEXT, true);
         g.text(font, "VISION", left + 66, top + 18, ORANGE_BRIGHT, true);
-        g.text(font, "v1.9.2  //  RSHIFT + F10", left + panelWidth - 167, top + 18, DIM, false);
+        g.text(font, "v1.9.3  //  RSHIFT + F10", left + panelWidth - 167, top + 18, DIM, false);
 
         double pulse = (Math.sin(now / 1_000_000_000.0 * 2.5) + 1.0) / 2.0;
         int pulseW = 18 + (int)(pulse * 18);
@@ -331,10 +331,13 @@ public final class DonutVisionScreen extends Screen {
         int y = top + 632;
         g.text(font, "DETECTED  " + BaseFinder.sites().size() + "   |   Scanned chunks  "
                 + BaseFinder.scannedChunks(), left + 19, y, ORANGE_BRIGHT, true);
-        y += 22;
+        y += 19;
+        g.text(font, "Distance = scan range | Sensitivity = number of results (score >= "
+                + BaseFinder.minScore() + ")", left + 19, y, DIM, false);
+        y += 21;
         if (BaseFinder.sites().isEmpty()) {
-            g.text(font, BaseFinder.enabled() ? "Scanning... No strong signals yet" : "Enable Base Finder in Modules",
-                    left + 19, y, DIM, false);
+            g.text(font, BaseFinder.enabled() ? "No matches yet. Increase sensitivity or explore loaded chunks."
+                    : "Enable Base Finder in Modules", left + 19, y, DIM, false);
             return;
         }
         int count = 0;
@@ -381,10 +384,10 @@ public final class DonutVisionScreen extends Screen {
         String reading = switch (c.label) {
             case "Block ESP range" -> BlockEsp.rangeLabel(BlockEsp.radius());
             case "Player ESP range" -> BlockEsp.rangeLabel(PlayerEsp.radius());
-            case "Base scan range" -> BaseFinder.radiusLabel();
+            case "Base scan distance" -> BaseFinder.radiusLabel();
             case "Y from" -> "Y " + BaseFinder.minY();
             case "Y to" -> "Y " + BaseFinder.maxY();
-            case "Minimum base score" -> Integer.toString(BaseFinder.minScore());
+            case "Base sensitivity" -> BaseFinder.sensitivity() + "%";
             default -> String.format(Locale.ROOT, "%.2f", Freecam.speed());
         };
         g.text(font, reading, c.x + c.w - 14 - font.width(reading), c.y + 14, ORANGE_BRIGHT, true);
