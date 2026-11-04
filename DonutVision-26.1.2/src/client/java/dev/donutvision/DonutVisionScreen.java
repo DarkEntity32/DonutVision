@@ -117,7 +117,9 @@ public final class DonutVisionScreen extends Screen {
                         DonutVisionClient::crystalEspEnabled, DonutVisionClient::toggleCrystalEsp);
                 toggle("Base Finder", "Locate suspicious chunks", x2, startY + 186,
                         BaseFinder::enabled, BaseFinder::toggle);
-                contentBottom = startY + 370;
+                toggle("Auto Attack Macro", "Crosshair only  /  F11 to toggle", x1, startY + 248,
+                        AutoAttack::enabled, AutoAttack::toggle);
+                contentBottom = startY + 425;
             }
             case FILTERS -> {
                 BlockEsp.Filter[] filters = BlockEsp.Filter.values();
@@ -154,7 +156,13 @@ public final class DonutVisionScreen extends Screen {
                 slider("Freecam speed", "0.20 - 1.50", x1, startY + 182, panelWidth - 42,
                         () -> (Freecam.speed() - 0.2) / 1.3,
                         value -> Freecam.setSpeed(0.2 + value * 1.3));
-                contentBottom = startY + 338;
+                slider("Macro interval", "200 - 3000 ms  /  only while Minecraft is open",
+                        x1, startY + 273, panelWidth - 42,
+                        () -> (AutoAttack.intervalMs() - 200.0) / 2800.0,
+                        value -> AutoAttack.setInterval(200 + (int)Math.round(value * 2800)));
+                action(() -> "Refresh Block ESP", "Recheck loaded chunks without clearing highlights",
+                        x1, startY + 370, panelWidth - 42, BlockEsp::refresh);
+                contentBottom = startY + 525;
             }
             case COLORS -> contentBottom = startY + 389;
             case BASES -> {
@@ -236,7 +244,7 @@ public final class DonutVisionScreen extends Screen {
         g.fill(left + 16, top + 1, left + 21, top + 52, 0x55FF8A25);
         g.text(font, "DONUT", left + 30, top + 18, TEXT, true);
         g.text(font, "VISION", left + 66, top + 18, ORANGE_BRIGHT, true);
-        g.text(font, "v1.9.3  //  RSHIFT + F10", left + panelWidth - 167, top + 18, DIM, false);
+        g.text(font, "v1.9.4  //  RSHIFT + F10", left + panelWidth - 167, top + 18, DIM, false);
 
         double pulse = (Math.sin(now / 1_000_000_000.0 * 2.5) + 1.0) / 2.0;
         int pulseW = 18 + (int)(pulse * 18);
@@ -287,14 +295,14 @@ public final class DonutVisionScreen extends Screen {
         String heading = switch (page) {
             case MODULES -> "MODULE CONTROL";
             case FILTERS -> "TARGET FILTERS";
-            case SETTINGS -> "RANGE & MOVEMENT";
+            case SETTINGS -> "RANGE, MACRO & ESP";
             case COLORS -> "TRACER PALETTE";
             case BASES -> "BASE FINDER";
         };
         String subtitle = switch (page) {
             case MODULES -> "Real-time toggles  /  animated switches";
             case FILTERS -> "Select which targets to highlight";
-            case SETTINGS -> "Custom ranges and movement speed";
+            case SETTINGS -> "Range, attack timer and client-side refresh";
             case COLORS -> "Each target keeps its own tracer color";
             case BASES -> "Y from / Y to: big red cubes; aim to inspect confidence";
         };
@@ -314,16 +322,15 @@ public final class DonutVisionScreen extends Screen {
         if (page == Page.BASES) {
             drawBaseFinds(g);
         } else if (page == Page.MODULES) {
-            int y = top + 467;
+            int y = top + 485;
             rounded(g, left + 17, y, panelWidth - 42, 49, 5, CARD);
-            g.text(font, "TRACKED BLOCKS", left + 28, y + 11, DIM, false);
-            g.text(font, Integer.toString(BlockEsp.targets().size()), left + 28, y + 29, ORANGE_BRIGHT, true);
-            g.text(font, "  |  Nearby block changes are checked continuously",
-                    left + 52, y + 29, TEXT, false);
+            g.text(font, "LIVE BLOCK ESP STATUS", left + 28, y + 11, DIM, false);
+            g.text(font, BlockEsp.statusLabel(), left + 28, y + 29, ORANGE_BRIGHT, false);
         } else if (page == Page.SETTINGS) {
-            rounded(g, left + 17, top + 425, panelWidth - 42, 42, 5, CARD);
-            g.text(font, "Infinity = client-loaded chunks only", left + 29, top + 440, TEXT, false);
-            g.text(font, "All changes are saved when closing the menu", left + 29, top + 454, DIM, false);
+            int y = top + 600;
+            rounded(g, left + 17, y, panelWidth - 42, 45, 5, CARD);
+            g.text(font, BlockEsp.statusLabel(), left + 29, y + 14, ORANGE_BRIGHT, false);
+            g.text(font, "Macro stops when you exit a world or close Minecraft", left + 29, y + 29, DIM, false);
         }
     }
 
@@ -388,6 +395,7 @@ public final class DonutVisionScreen extends Screen {
             case "Y from" -> "Y " + BaseFinder.minY();
             case "Y to" -> "Y " + BaseFinder.maxY();
             case "Base sensitivity" -> BaseFinder.sensitivity() + "%";
+            case "Macro interval" -> AutoAttack.intervalLabel();
             default -> String.format(Locale.ROOT, "%.2f", Freecam.speed());
         };
         g.text(font, reading, c.x + c.w - 14 - font.width(reading), c.y + 14, ORANGE_BRIGHT, true);

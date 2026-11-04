@@ -30,6 +30,8 @@ public final class ClientSettings {
             PlayerEsp.setRadius(parseInt(data.getProperty("playerRadius"), BlockEsp.UNLIMITED));
             BlockEsp.setMode(parseInt(data.getProperty("mode"), 0));
             Freecam.setSpeed(parseDouble(data.getProperty("speed"), 0.42));
+            AutoAttack.setInterval(parseInt(data.getProperty("autoAttackIntervalMs"), 800));
+            // The macro deliberately starts OFF on each game launch.
             BaseFinder.setRadius(parseInt(data.getProperty("baseRange"), 192));
             BaseFinder.setMinScore(parseInt(data.getProperty("baseMinScore"), 24));
             BaseFinder.setYRange(parseInt(data.getProperty("baseMinY"), -64),
@@ -57,6 +59,7 @@ public final class ClientSettings {
         data.setProperty("playerRadius", Integer.toString(PlayerEsp.radius()));
         data.setProperty("mode", Integer.toString(BlockEsp.mode()));
         data.setProperty("speed", Double.toString(Freecam.speed()));
+        data.setProperty("autoAttackIntervalMs", Integer.toString(AutoAttack.intervalMs()));
         data.setProperty("baseFinder", Boolean.toString(BaseFinder.enabled()));
         data.setProperty("baseTracers", Boolean.toString(BaseFinder.tracers()));
         data.setProperty("baseAlerts", Boolean.toString(BaseFinder.alerts()));

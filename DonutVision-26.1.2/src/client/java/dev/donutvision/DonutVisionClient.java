@@ -20,6 +20,7 @@ public final class DonutVisionClient implements ClientModInitializer {
     private static KeyMapping radiusKey;
     private static KeyMapping menuKey;
     private static KeyMapping backupMenuKey;
+    private static KeyMapping macroKey;
     private boolean welcomeShown = false;
 
     public static boolean espEnabled() {
@@ -95,7 +96,10 @@ public final class DonutVisionClient implements ClientModInitializer {
         backupMenuKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.donutvision.menu_backup", InputConstants.Type.KEYSYM, InputConstants.KEY_F10, category));
 
-        System.out.println("[DonutVision] 1.9.2 client initializer loaded. Menu keys: Right Shift or F10.");
+        macroKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+                "key.donutvision.macro", InputConstants.Type.KEYSYM, InputConstants.KEY_F11, category));
+
+        System.out.println("[DonutVision] 1.9.4 client initializer loaded. Menu keys: Right Shift or F10.");
         ClientSettings.load();
         EspOverlay.install();
         BaseFinderHud.install();
@@ -114,11 +118,12 @@ public final class DonutVisionClient implements ClientModInitializer {
             Freecam.disable();
             BlockEsp.clear();
             BaseFinder.onWorldGone();
+            AutoAttack.setEnabled(false); // Never leave the macro armed after disconnecting.
             return;
         }
         if (!welcomeShown) {
             welcomeShown = true;
-            notify(mc, "v1.9.3 loaded! Base Finder: Modules / Bases tab.");
+            notify(mc, "v1.9.4 loaded! Auto Attack: Modules / F11; ESP status: Settings.");
         }
         while (freecamKey.consumeClick()) {
             Freecam.toggle(mc);
@@ -138,9 +143,15 @@ public final class DonutVisionClient implements ClientModInitializer {
             ClientSettings.save();
             notify(mc, "ESP radius: " + BlockEsp.rangeLabel(BlockEsp.radius()));
         }
+        while (macroKey.consumeClick()) {
+            AutoAttack.toggle();
+            notify(mc, "Auto Attack: " + (AutoAttack.enabled() ? "ON" : "OFF")
+                    + " (" + AutoAttack.intervalLabel() + ")");
+        }
         Freecam.tick(mc);
         BlockEsp.tick(mc, espEnabled, spawnerEspEnabled, crystalEspEnabled);
         BaseFinder.tick(mc);
+        AutoAttack.tick(mc);
     }
 
     private static void notify(Minecraft mc, String text) {

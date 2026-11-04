@@ -10,6 +10,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.BlockHitResult;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -42,12 +43,13 @@ public final class BlockEsp {
     public static final int CRYSTAL_COLOR = 0xFFCB85FF;
     private static final int SECTIONS_PER_TICK = 48;
     private static final long SCAN_TIME_BUDGET_NS = 2_700_000L;
-    private static final int SCAN_REFRESH_TICKS = 180;
+    private static final int SCAN_REFRESH_TICKS = 80;
     private static final int NEAR_RADIUS = 5;
     private static final int NEAR_SIDE = NEAR_RADIUS * 2 + 1;
     private static final int NEAR_CELLS = NEAR_SIDE * NEAR_SIDE * NEAR_SIDE;
     private static final int NEAR_SAMPLES_PER_TICK = 750;
     private static final long NEAR_TIME_BUDGET_NS = 1_100_000L;
+    private static int lastLoadedChunkCount;
 
     public enum Filter {
         DIAMOND("Diamonds"), DEBRIS("Ancient debris"), EMERALD("Emeralds"),
@@ -156,6 +158,7 @@ public final class BlockEsp {
         crystalMatches = List.of();
         scanLevel = null;
         nearIndex = 0;
+        lastLoadedChunkCount = 0;
     }
 
     public static void tick(Minecraft mc, boolean blockEnabled, boolean spawnerEnabled,
@@ -178,6 +181,11 @@ public final class BlockEsp {
         // Check nearby changes each tick, independently from the distant section scan.
         // This also detects blocks placed into a section that was scanned seconds earlier.
         scanNear(level, mc.player.blockPosition(), blockEnabled, spawnerEnabled, crystalEnabled);
+        // Fast path: confirm newly placed/removed blocks near the current vanilla target.
+        // This reads only real client-loaded blocks; it does not reveal masked server data.
+        if (mc.hitResult instanceof BlockHitResult look) {
+            scanAimNeighborhood(level, look.getBlockPos(), blockEnabled, spawnerEnabled, crystalEnabled);
+        }
         if (Freecam.active() && center.distSqr(mc.player.blockPosition()) > 36.0) {
             scanNear(level, center, blockEnabled, spawnerEnabled, crystalEnabled);
         }
@@ -222,13 +230,10 @@ public final class BlockEsp {
             if (!section.hasOnlyAir() && section.maybeHas(INTERESTING)) {
                 for (int ly = 0; ly < 16; ly++) {
                     int y = baseY + ly;
-                    if (radius != UNLIMITED && Math.abs(y - center.getY()) > radius) continue;
                     for (int lx = 0; lx < 16; lx++) {
                         int x = baseX + lx;
-                        if (radius != UNLIMITED && Math.abs(x - center.getX()) > radius) continue;
                         for (int lz = 0; lz < 16; lz++) {
                             int z = baseZ + lz;
-                            if (radius != UNLIMITED && Math.abs(z - center.getZ()) > radius) continue;
                             Block block = section.getBlockState(lx, ly, lz).getBlock();
                             if (isSpawner(block)) {
                                 if (spawnerEnabled) foundSpawners.add(new Target(new BlockPos(x, y, z), spawnerColor(block)));
@@ -253,6 +258,36 @@ public final class BlockEsp {
             publish(center, blockEnabled, spawnerEnabled, crystalEnabled);
             ticksSincePublish = 0;
         }
+    }
+
+    private static void scanAimNeighborhood(ClientLevel level, BlockPos aim, boolean blocks,
+                                            boolean spawners, boolean crystals) {
+        for (int dx = -1; dx <= 1; dx++) for (int dy = -1; dy <= 1; dy++)
+            for (int dz = -1; dz <= 1; dz++) {
+                BlockPos pos = aim.offset(dx, dy, dz);
+                if (pos.getY() < level.getMinY() || pos.getY() >= level.getMaxY()) continue;
+                LevelChunk chunk = level.getChunkSource().getChunk(pos.getX() >> 4,
+                        pos.getZ() >> 4, ChunkStatus.FULL, false);
+                if (chunk == null) continue;
+                Block block = chunk.getBlockState(pos).getBlock();
+                if (blocks) updateSingle(pos, colorFor(block), cachedBlocks,
+                        blockSectionIndex, MAX_CACHED_TARGETS);
+                if (spawners) updateSingle(pos, isSpawner(block) ? spawnerColor(block) : 0,
+                        cachedSpawners, spawnerSectionIndex, MAX_SPAWNERS * 3);
+                if (crystals) updateSingle(pos, isCrystal(block) ? CRYSTAL_COLOR : 0,
+                        cachedCrystals, crystalSectionIndex, MAX_CRYSTALS * 3);
+            }
+    }
+
+    /** Re-scan without dropping already confirmed targets while chunks are processed. */
+    public static void refresh() { restartScan(); }
+
+    public static String statusLabel() {
+        int done = Math.min(chunkIndex, scanChunks.size());
+        String progress = scanning ? "scanning " + done + "/" + scanChunks.size() + " chunks"
+                : "scan idle (" + lastLoadedChunkCount + " chunks)";
+        return "ESP " + cachedBlocks.size() + " cached / " + matches.size()
+                + " visible - " + progress;
     }
 
     private static void scanNear(ClientLevel level, BlockPos center, boolean blocks, boolean spawners,
@@ -370,6 +405,7 @@ public final class BlockEsp {
                 (long)(p.x() - pivotX) * (p.x() - pivotX) +
                 (long)(p.z() - pivotZ) * (p.z() - pivotZ)));
         scanChunks = loaded;
+        lastLoadedChunkCount = loaded.size();
         int count = level.getSectionsCount();
         Integer[] indices = new Integer[count];
         for (int i = 0; i < count; i++) indices[i] = i;
