@@ -5,5 +5,7 @@
   "key.donutvision.esp": "Toggle Block ESP",
   "key.donutvision.mode": "Cycle ESP Targets",
   "key.donutvision.radius": "Cycle ESP Radius",
-  "key.donutvision.menu_backup": "Open DonutVision menu (backup)"
+  "key.donutvision.menu_backup": "Open DonutVision menu (backup)",
+  "key.donutvision.macro": "Toggle Auto Attack Macro",
+  "key.donutvision.schematic_assist": "Smart Schematic Place"
 }

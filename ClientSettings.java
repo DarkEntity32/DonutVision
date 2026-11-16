@@ -21,9 +21,26 @@ public final class ClientSettings {
         try (InputStream input = Files.newInputStream(FILE)) {
             data.load(input);
             DonutVisionClient.setEspEnabled(Boolean.parseBoolean(data.getProperty("espEnabled", "false")));
-            BlockEsp.setRadius(parseInt(data.getProperty("radius"), 12));
+            DonutVisionClient.setBlockTracers(Boolean.parseBoolean(data.getProperty("blockTracers", "true")));
+            DonutVisionClient.setSpawnerEspEnabled(Boolean.parseBoolean(data.getProperty("spawnerEsp", "false")));
+            DonutVisionClient.setCrystalEspEnabled(Boolean.parseBoolean(data.getProperty("crystalEsp", "false")));
+            PlayerEsp.setEnabled(Boolean.parseBoolean(data.getProperty("playerEsp", "false")));
+            PlayerEsp.setTracers(Boolean.parseBoolean(data.getProperty("playerTracers", "true")));
+            BlockEsp.setRadius(parseInt(data.getProperty("radius"), 24));
+            PlayerEsp.setRadius(parseInt(data.getProperty("playerRadius"), BlockEsp.UNLIMITED));
             BlockEsp.setMode(parseInt(data.getProperty("mode"), 0));
             Freecam.setSpeed(parseDouble(data.getProperty("speed"), 0.42));
+            AutoAttack.setInterval(parseInt(data.getProperty("autoAttackIntervalMs"), 800));
+            // Smart placement, like the attack macro, starts OFF after launch.
+            SchematicAssist.setSnapRadius(parseDouble(data.getProperty("schematicSnapRadius"), 1.75));
+            // The macro deliberately starts OFF on each game launch.
+            BaseFinder.setRadius(parseInt(data.getProperty("baseRange"), 192));
+            BaseFinder.setMinScore(parseInt(data.getProperty("baseMinScore"), 24));
+            BaseFinder.setYRange(parseInt(data.getProperty("baseMinY"), -64),
+                    parseInt(data.getProperty("baseMaxY"), 0));
+            BaseFinder.setTracers(Boolean.parseBoolean(data.getProperty("baseTracers", "true")));
+            BaseFinder.setAlerts(Boolean.parseBoolean(data.getProperty("baseAlerts", "true")));
+            BaseFinder.setEnabled(Boolean.parseBoolean(data.getProperty("baseFinder", "false")));
             for (BlockEsp.Filter filter : BlockEsp.Filter.values()) {
                 BlockEsp.setFilter(filter, Boolean.parseBoolean(data.getProperty("block." + filter.name(), "true")));
             }
@@ -35,9 +52,24 @@ public final class ClientSettings {
     public static void save() {
         Properties data = new Properties();
         data.setProperty("espEnabled", Boolean.toString(DonutVisionClient.espEnabled()));
+        data.setProperty("schematicSnapRadius", Double.toString(SchematicAssist.snapRadius()));
+        data.setProperty("blockTracers", Boolean.toString(DonutVisionClient.blockTracers()));
+        data.setProperty("spawnerEsp", Boolean.toString(DonutVisionClient.spawnerEspEnabled()));
+        data.setProperty("crystalEsp", Boolean.toString(DonutVisionClient.crystalEspEnabled()));
+        data.setProperty("playerEsp", Boolean.toString(PlayerEsp.enabled()));
+        data.setProperty("playerTracers", Boolean.toString(PlayerEsp.tracers()));
         data.setProperty("radius", Integer.toString(BlockEsp.radius()));
+        data.setProperty("playerRadius", Integer.toString(PlayerEsp.radius()));
         data.setProperty("mode", Integer.toString(BlockEsp.mode()));
         data.setProperty("speed", Double.toString(Freecam.speed()));
+        data.setProperty("autoAttackIntervalMs", Integer.toString(AutoAttack.intervalMs()));
+        data.setProperty("baseFinder", Boolean.toString(BaseFinder.enabled()));
+        data.setProperty("baseTracers", Boolean.toString(BaseFinder.tracers()));
+        data.setProperty("baseAlerts", Boolean.toString(BaseFinder.alerts()));
+        data.setProperty("baseRange", Integer.toString(BaseFinder.radius()));
+        data.setProperty("baseMinScore", Integer.toString(BaseFinder.minScore()));
+        data.setProperty("baseMinY", Integer.toString(BaseFinder.minY()));
+        data.setProperty("baseMaxY", Integer.toString(BaseFinder.maxY()));
         for (BlockEsp.Filter filter : BlockEsp.Filter.values()) {
             data.setProperty("block." + filter.name(), Boolean.toString(BlockEsp.filterEnabled(filter)));
         }

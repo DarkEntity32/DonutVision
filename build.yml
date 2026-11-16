@@ -13,7 +13,7 @@ jobs:
           java-version: '25'
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '9.6.0-20260424005419+0000'
+          gradle-version: '9.6.1'
       - name: Compile Fabric mod
         run: gradle --no-daemon clean build --stacktrace
       - name: Verify built JAR includes client classes and Fabric metadata
@@ -24,13 +24,13 @@ jobs:
           assert len(paths)==1, f'Expected exactly one distributable JAR: {paths}'
           with zipfile.ZipFile(paths[0]) as z:
               files=set(z.namelist())
-              for needed in ['fabric.mod.json', 'dev/donutvision/DonutVisionClient.class', 'dev/donutvision/DonutVisionScreen.class']:
+              for needed in ['fabric.mod.json', 'dev/donutvision/DonutVisionClient.class', 'dev/donutvision/DonutVisionScreen.class', 'dev/donutvision/PlayerEsp.class', 'dev/donutvision/EspOverlay.class', 'dev/donutvision/SchematicAssist.class']:
                   assert needed in files, f'Missing: {needed}'
               meta=json.loads(z.read('fabric.mod.json'))
-              assert meta['id']=='donutvision' and meta['version']=='1.2.0', meta
+              assert meta['id']=='donutvision' and meta['version']=='1.9.6', meta
           print('JAR structure check PASSED:', paths[0])
       - uses: actions/upload-artifact@v4
         with:
           name: donutvision-26.1.2-jar
-          path: build/libs/donutvision-26.1.2-1.2.0.jar
+          path: build/libs/donutvision-26.1.2-1.9.6.jar
           if-no-files-found: error

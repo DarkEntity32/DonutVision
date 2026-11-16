@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "id": "donutvision",
-  "version": "1.2.0",
+  "version": "1.9.6",
   "name": "DonutVision 26.1.2",
-  "description": "Fabric 26.1.2 client tools with configurable Freecam and Block ESP. Right Shift / F10 settings screen.",
+  "description": "Fabric 26.1.2: Smart Schematic Place (Litematica), Discovery History, auto-attack macro, Block ESP and Base Finder.",
   "environment": "client",
   "entrypoints": {
     "client": [
