@@ -27,10 +27,10 @@ jobs:
               for needed in ['fabric.mod.json', 'dev/donutvision/DonutVisionClient.class', 'dev/donutvision/DonutVisionScreen.class', 'dev/donutvision/PlayerEsp.class', 'dev/donutvision/EspOverlay.class', 'dev/donutvision/SchematicAssist.class']:
                   assert needed in files, f'Missing: {needed}'
               meta=json.loads(z.read('fabric.mod.json'))
-              assert meta['id']=='donutvision' and meta['version']=='1.9.6', meta
+              assert meta['id']=='donutvision' and meta['version']=='1.9.7', meta
           print('JAR structure check PASSED:', paths[0])
       - uses: actions/upload-artifact@v4
         with:
           name: donutvision-26.1.2-jar
-          path: build/libs/donutvision-26.1.2-1.9.6.jar
+          path: build/libs/donutvision-26.1.2-1.9.7.jar
           if-no-files-found: error

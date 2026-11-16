@@ -103,7 +103,7 @@ public final class DonutVisionClient implements ClientModInitializer {
         schematicKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.donutvision.schematic_assist", InputConstants.Type.KEYSYM, InputConstants.KEY_F12, category));
 
-        System.out.println("[DonutVision] 1.9.6 client initializer loaded. Menu keys: Right Shift or F10.");
+        System.out.println("[DonutVision] 1.9.7 client initializer loaded. Menu keys: Right Shift or F10.");
         ClientSettings.load();
         EspOverlay.install();
         BaseFinderHud.install();
@@ -124,11 +124,12 @@ public final class DonutVisionClient implements ClientModInitializer {
             BlockEsp.clear();
             BaseFinder.onWorldGone();
             AutoAttack.setEnabled(false); // Never leave the macro armed after disconnecting.
+            SchematicAssist.setEnabled(false); // Never auto-build after reconnect.
             return;
         }
         if (!welcomeShown) {
             welcomeShown = true;
-            notify(mc, "v1.9.6 loaded! Smart Schematic Place: F12 / Modules (requires Litematica).");
+            notify(mc, "v1.9.7 loaded! Hold RMB to print in reach. F12 toggles (Litematica).");
         }
         while (freecamKey.consumeClick()) {
             Freecam.toggle(mc);
@@ -155,13 +156,14 @@ public final class DonutVisionClient implements ClientModInitializer {
         }
         while (schematicKey.consumeClick()) {
             SchematicAssist.toggle();
-            notify(mc, "Smart Schematic Place: " + (SchematicAssist.enabled() ? "ON" : "OFF")
+            notify(mc, "Schematic Printer: " + (SchematicAssist.enabled() ? "ON" : "OFF")
                     + (SchematicAssist.litematicaLoaded() ? "" : " (install Litematica + MaLiLib)"));
         }
         Freecam.tick(mc);
         BlockEsp.tick(mc, espEnabled, spawnerEspEnabled, crystalEspEnabled);
         BaseFinder.tick(mc);
         AutoAttack.tick(mc);
+        SchematicAssist.tick(mc);
     }
 
     private static void notify(Minecraft mc, String text) {

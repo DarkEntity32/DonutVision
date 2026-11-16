@@ -32,7 +32,7 @@ public final class ClientSettings {
             Freecam.setSpeed(parseDouble(data.getProperty("speed"), 0.42));
             AutoAttack.setInterval(parseInt(data.getProperty("autoAttackIntervalMs"), 800));
             // Smart placement, like the attack macro, starts OFF after launch.
-            SchematicAssist.setSnapRadius(parseDouble(data.getProperty("schematicSnapRadius"), 1.75));
+            SchematicAssist.setSnapRadius(parseDouble(data.getProperty("printerRadius", "4.25"), 4.25));
             // The macro deliberately starts OFF on each game launch.
             BaseFinder.setRadius(parseInt(data.getProperty("baseRange"), 192));
             BaseFinder.setMinScore(parseInt(data.getProperty("baseMinScore"), 24));
@@ -52,7 +52,7 @@ public final class ClientSettings {
     public static void save() {
         Properties data = new Properties();
         data.setProperty("espEnabled", Boolean.toString(DonutVisionClient.espEnabled()));
-        data.setProperty("schematicSnapRadius", Double.toString(SchematicAssist.snapRadius()));
+        data.setProperty("printerRadius", Double.toString(SchematicAssist.snapRadius()));
         data.setProperty("blockTracers", Boolean.toString(DonutVisionClient.blockTracers()));
         data.setProperty("spawnerEsp", Boolean.toString(DonutVisionClient.spawnerEspEnabled()));
         data.setProperty("crystalEsp", Boolean.toString(DonutVisionClient.crystalEspEnabled()));

@@ -119,7 +119,7 @@ public final class DonutVisionScreen extends Screen {
                         BaseFinder::enabled, BaseFinder::toggle);
                 toggle("Auto Attack Macro", "Crosshair only  /  F11 to toggle", x1, startY + 248,
                         AutoAttack::enabled, AutoAttack::toggle);
-                toggle("Smart Schematic Place", "Correct nearby misses / F12 / Litematica", x2, startY + 248,
+                toggle("Schematic Printer", "HOLD RMB / no aiming / F12 / Litematica", x2, startY + 248,
                         SchematicAssist::enabled, SchematicAssist::toggle);
                 contentBottom = startY + 425;
             }
@@ -164,10 +164,10 @@ public final class DonutVisionScreen extends Screen {
                         value -> AutoAttack.setInterval(200 + (int)Math.round(value * 2800)));
                 action(() -> "Refresh Block ESP", "Recheck loaded chunks without clearing highlights",
                         x1, startY + 370, panelWidth - 42, BlockEsp::refresh);
-                slider("Schematic snap radius", "0.75 - 3 blocks / aim near a ghost block",
+                slider("Printer build radius", "1.5 - 4.4 blocks / vanilla reach only",
                         x1, startY + 448, panelWidth - 42,
-                        () -> (SchematicAssist.snapRadius() - 0.75) / 2.25,
-                        value -> SchematicAssist.setSnapRadius(0.75 + value * 2.25));
+                        () -> (SchematicAssist.snapRadius() - 1.5) / 2.9,
+                        value -> SchematicAssist.setSnapRadius(1.5 + value * 2.9));
                 contentBottom = startY + 650;
             }
             case COLORS -> contentBottom = startY + 389;
@@ -250,7 +250,7 @@ public final class DonutVisionScreen extends Screen {
         g.fill(left + 16, top + 1, left + 21, top + 52, 0x55FF8A25);
         g.text(font, "DONUT", left + 30, top + 18, TEXT, true);
         g.text(font, "VISION", left + 66, top + 18, ORANGE_BRIGHT, true);
-        g.text(font, "v1.9.6  //  RSHIFT + F10", left + panelWidth - 167, top + 18, DIM, false);
+        g.text(font, "v1.9.7  //  RSHIFT + F10", left + panelWidth - 167, top + 18, DIM, false);
 
         double pulse = (Math.sin(now / 1_000_000_000.0 * 2.5) + 1.0) / 2.0;
         int pulseW = 18 + (int)(pulse * 18);
@@ -331,7 +331,7 @@ public final class DonutVisionScreen extends Screen {
             int y = top + 485;
             rounded(g, left + 17, y, panelWidth - 42, 49, 5, CARD);
             g.text(font, "LIVE BLOCK ESP STATUS", left + 28, y + 11, DIM, false);
-            g.text(font, BlockEsp.statusLabel(), left + 28, y + 29, ORANGE_BRIGHT, false);
+            g.text(font, SchematicAssist.enabled() ? SchematicAssist.status() : BlockEsp.statusLabel(), left + 28, y + 29, ORANGE_BRIGHT, false);
         } else if (page == Page.SETTINGS) {
             int y = top + 600;
             rounded(g, left + 17, y, panelWidth - 42, 45, 5, CARD);
