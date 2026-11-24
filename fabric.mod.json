@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "donutvision",
-  "version": "1.9.8",
+  "version": "1.9.9",
   "name": "DonutVision 26.1.2",
   "description": "Fabric 26.1.2: Schematic Printer (Litematica), Discovery History, auto-attack macro, Block ESP and Base Finder.",
   "environment": "client",

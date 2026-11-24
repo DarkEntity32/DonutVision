@@ -101,26 +101,27 @@ public final class DonutVisionScreen extends Screen {
         int x2 = x1 + colWidth + 8;
         switch (page) {
             case MODULES -> {
-                toggle("Freecam", "Detached camera", x1, startY,
-                        Freecam::active, () -> Freecam.toggle(minecraft));
-                toggle("Block ESP", "Ores and storage", x2, startY,
-                        DonutVisionClient::espEnabled, DonutVisionClient::toggleEsp);
-                toggle("Spawner ESP", "Mob / trial spawners", x1, startY + 62,
-                        DonutVisionClient::spawnerEspEnabled, DonutVisionClient::toggleSpawnerEsp);
-                toggle("Player ESP", "Visible players", x2, startY + 62,
-                        PlayerEsp::enabled, PlayerEsp::toggle);
-                toggle("Block tracers", "Lines to found blocks", x1, startY + 124,
-                        DonutVisionClient::blockTracers, DonutVisionClient::toggleBlockTracers);
-                toggle("Player tracers", "Lines to players", x2, startY + 124,
-                        PlayerEsp::tracers, PlayerEsp::toggleTracers);
-                toggle("Crystal Cluster ESP", "Amethyst crystal clusters", x1, startY + 186,
-                        DonutVisionClient::crystalEspEnabled, DonutVisionClient::toggleCrystalEsp);
-                toggle("Base Finder", "Locate suspicious chunks", x2, startY + 186,
-                        BaseFinder::enabled, BaseFinder::toggle);
-                toggle("Auto Attack Macro", "Crosshair only  /  F11 to toggle", x1, startY + 248,
-                        AutoAttack::enabled, AutoAttack::toggle);
-                toggle("Schematic Printer", "HOLD RMB / no aiming / F12 / Litematica", x2, startY + 248,
+                // Printer ON/OFF is the first visible switch -- no scroll needed.
+                toggle("Schematic Printer", "Hold RMB / F12 / Litematica", x1, startY,
                         SchematicAssist::enabled, SchematicAssist::toggle);
+                toggle("Auto Attack Macro", "Crosshair only / F11", x2, startY,
+                        AutoAttack::enabled, AutoAttack::toggle);
+                toggle("Freecam", "Detached camera", x1, startY + 62,
+                        Freecam::active, () -> Freecam.toggle(minecraft));
+                toggle("Block ESP", "Ores and storage", x2, startY + 62,
+                        DonutVisionClient::espEnabled, DonutVisionClient::toggleEsp);
+                toggle("Spawner ESP", "Mob / trial spawners", x1, startY + 124,
+                        DonutVisionClient::spawnerEspEnabled, DonutVisionClient::toggleSpawnerEsp);
+                toggle("Player ESP", "Visible players", x2, startY + 124,
+                        PlayerEsp::enabled, PlayerEsp::toggle);
+                toggle("Block tracers", "Lines to found blocks", x1, startY + 186,
+                        DonutVisionClient::blockTracers, DonutVisionClient::toggleBlockTracers);
+                toggle("Player tracers", "Lines to players", x2, startY + 186,
+                        PlayerEsp::tracers, PlayerEsp::toggleTracers);
+                toggle("Crystal Cluster ESP", "Amethyst crystal clusters", x1, startY + 248,
+                        DonutVisionClient::crystalEspEnabled, DonutVisionClient::toggleCrystalEsp);
+                toggle("Base Finder", "Locate suspicious chunks", x2, startY + 248,
+                        BaseFinder::enabled, BaseFinder::toggle);
                 contentBottom = startY + 425;
             }
             case FILTERS -> {
@@ -402,6 +403,7 @@ public final class DonutVisionScreen extends Screen {
             case "Y to" -> "Y " + BaseFinder.maxY();
             case "Base sensitivity" -> BaseFinder.sensitivity() + "%";
             case "Macro interval" -> AutoAttack.intervalLabel();
+            case "Printer build radius" -> String.format(Locale.ROOT, "%.2f blocks", SchematicAssist.snapRadius());
             default -> String.format(Locale.ROOT, "%.2f", Freecam.speed());
         };
         g.text(font, reading, c.x + c.w - 14 - font.width(reading), c.y + 14, ORANGE_BRIGHT, true);

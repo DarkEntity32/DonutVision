@@ -21,278 +21,273 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Opt-in, HOLD-RMB schematic printer for normal vanilla block interactions.
+ * DonutVision Schematic Printer. It reads the placed schematic's virtual world,
+ * NOT Litematica Easy Place / its hotkeys or click handler.
  *
- * Unlike the old miss-click helper, this does NOT rely on crosshair position.
- * Every fifth client tick while RMB is held it finds a missing schematic block
- * within ordinary survival reach, selects its matching HOTBAR item, and asks
- * Minecraft to place it against a REAL adjacent face. This permits working on
- * walls and overhanging/floating structures as long as each individual new block
- * has some existing support. Vanilla survival servers normally reject arbitrary
- * unsupported mid-air placement, so this class NEVER promises such placement.
+ * The player opts in using the DonutVision GUI or F12, then HOLDS RMB. On each
+ * attempt we find a missing block near the player, select the correct item from
+ * hotbar slots 1..9, and use a normal client interaction against a visible real
+ * neighbor. The server performs its usual distance and placement checks.
  *
- * It will not change direction-dependent block states, break existing blocks,
- * automatically move the player, spoof reach, or bypass server checks.
+ * This deliberately does not spoof reach, place unsupported blocks in mid-air,
+ * or edit real world blocks locally. Complex directional states may differ.
  */
 public final class SchematicAssist {
-    private static final int PLACEMENT_INTERVAL_TICKS = 5;
-    private static final int RETRY_COOLDOWN_TICKS = 30;
-    private static final double MAX_REACH = 4.4;
-    private static final int SCAN_RANGE = 5;
-    private static final int ITEM_LOOKUP_RANGE = 16; // Hotbar selection can look farther than placement range.
-    private static int lastMissingHotbar;
-    private static int lastMissingSupport;
-    private static int lastSchematicTargets;
+    private static final double VANILLA_REACH = 4.4;
+    private static final int MAX_SCAN = 5;
+    private static final int HOTBAR_PREVIEW_RANGE = 10;
+    private static final int PLACE_DELAY_TICKS = 4;
+    private static final int RETRY_DELAY_TICKS = 30;
 
     private static boolean enabled;
-    private static double buildRadius = 4.25;
-    private static Method schematicWorldGetter;
-    private static boolean resolved;
-    private static long tickCount;
-    private static long nextActionTick;
-    private static Level lastSchematic;
+    private static double radius = 4.25;
     private static String status = "OFF";
-    private static final Map<Long, Long> recentAttempts = new HashMap<>();
+    private static boolean reflected;
+    private static Method worldGetter;
+    private static String reflectionError = "";
+    private static Level lastSchematic;
+    private static long ticks;
+    private static long nextAttempt;
+    private static long clickUntil;
+    private static final Map<Long, Long> attemptedPositions = new HashMap<>();
 
-    private SchematicAssist() { }
+    private SchematicAssist() {}
 
     public static boolean enabled() { return enabled; }
     public static boolean litematicaLoaded() {
         return FabricLoader.getInstance().isModLoaded("litematica");
     }
-
     public static String status() { return status; }
-    public static double snapRadius() { return buildRadius; } // Legacy settings compatibility.
-    public static void setSnapRadius(double blocks) {
-        if (Double.isFinite(blocks)) buildRadius = Math.max(1.5, Math.min(MAX_REACH, blocks));
+    public static double snapRadius() { return radius; }
+    public static void setSnapRadius(double value) {
+        if (Double.isFinite(value)) radius = Math.max(1.5, Math.min(VANILLA_REACH, value));
     }
-
     public static void toggle() { setEnabled(!enabled); }
     public static void setEnabled(boolean value) {
         enabled = value;
-        nextActionTick = 0;
-        recentAttempts.clear();
-        status = enabled ? "Hold RMB: auto-select + build within reach" : "OFF";
+        nextAttempt = 0;
+        clickUntil = 0;
+        attemptedPositions.clear();
+        status = enabled ? "ON - hold RMB to build" : "OFF - normal block placing";
     }
 
-    /** Consumes the normal RMB use action only while our printer is armed. */
+    /**
+     * Called at the head of Minecraft.startUseItem. Never swallow the RMB use
+     * when the printer is disabled or no schematic world is accessible.
+     * When armed and a schematic exists, the printer owns the RMB action:
+     * clicking a random block won't accidentally place an incorrect item.
+     */
     public static boolean handleUse(Minecraft mc) {
-        return enabled && litematicaLoaded() && mc.player != null && mc.level != null
-                && mc.screen == null && !Freecam.active()
-                && (mc.hitResult == null || mc.hitResult.getType() != HitResult.Type.ENTITY);
+        if (!enabled || !litematicaLoaded() || mc.player == null || mc.level == null
+                || mc.screen != null || Freecam.active() || mc.gameMode == null
+                || mc.gameMode.isSpectator()) return false;
+        if (schematicWorld() == null) return false;
+        clickUntil = ticks + 4;
+        return true;
     }
 
-    /** Call from END_CLIENT_TICK: this is not tied to the crosshair or click spam. */
     public static void tick(Minecraft mc) {
-        tickCount++;
+        ticks++;
         if (!enabled) return;
-        if (mc.player == null || mc.level == null || mc.gameMode == null || mc.gameMode.isSpectator()) {
-            status = "No playable world";
-            return;
-        }
-        if (!litematicaLoaded()) {
-            status = "Install Litematica + MaLiLib";
-            return;
-        }
-        if (mc.screen != null || Freecam.active()) {
-            // Keep the last useful diagnostic visible when the user opens our GUI.
-            return;
-        }
-        if (!mc.options.keyUse.isDown()) {
-            status = "Ready - hold RMB (F12 enables/disables)";
-            return;
-        }
-        if (tickCount < nextActionTick) return;
+        if (mc.player == null || mc.level == null || mc.gameMode == null
+                || mc.gameMode.isSpectator()) { status = "No game world"; return; }
+        if (!litematicaLoaded()) { status = "Litematica is not installed"; return; }
+        if (mc.screen != null || Freecam.active()) return;
+
         Level schematic = schematicWorld();
         if (schematic == null) {
-            status = "Litematica: no active schematic placement";
-            nextActionTick = tickCount + 20;
+            status = reflectionError.isEmpty()
+                    ? "No Litematica schematic world"
+                    : "Cannot read Litematica (see log)";
             return;
         }
-        if (lastSchematic != schematic) {
+        if (schematic != lastSchematic) {
             lastSchematic = schematic;
-            recentAttempts.clear();
+            attemptedPositions.clear();
         }
-        recentAttempts.entrySet().removeIf(e -> e.getValue() <= tickCount);
+        if (!mc.options.keyUse.isDown() && ticks > clickUntil) {
+            status = "ON - hold RMB to build";
+            return;
+        }
+        if (ticks < nextAttempt) return;
+        attemptedPositions.entrySet().removeIf(entry -> entry.getValue() <= ticks);
 
-        Candidate candidate = findNext(mc, schematic);
-        if (candidate == null) {
-            // Fix v1.9.7: item selection must NOT require a placeable support face.
-            // Select the material for a nearby unfinished blueprint block even if
-            // the player has to move or provide a support before it can be placed.
-            HotbarTarget preview = findHotbarTarget(mc, schematic);
-            if (preview != null) {
-                int current = mc.player.getInventory().getSelectedSlot();
-                if (current != preview.hotbarSlot()) {
-                    mc.player.getInventory().setSelectedSlot(preview.hotbarSlot());
-                    status = "Auto-selected slot " + (preview.hotbarSlot() + 1)
-                            + " (move closer / add support)";
-                } else if (lastMissingSupport > 0) {
-                    status = "Selected slot " + (current + 1) + "; no reachable support";
-                } else {
-                    status = "Selected slot " + (current + 1) + "; move closer to build";
-                }
-            } else if (lastMissingHotbar > 0) {
-                status = "Missing matching hotbar block (slots 1-9)";
-            } else if (lastSchematicTargets > 0) {
-                status = "Blueprint block nearby, but not placeable here";
+        // Placement is searched independently of where the crosshair points.
+        SearchResult search = findPlaceable(mc, schematic);
+        if (search.placeable() != null) {
+            Candidate candidate = search.placeable();
+            int current = mc.player.getInventory().getSelectedSlot();
+            if (current != candidate.hotbarSlot()) {
+                mc.player.getInventory().setSelectedSlot(candidate.hotbarSlot());
+                status = "Hotbar -> slot " + (candidate.hotbarSlot() + 1);
+                nextAttempt = ticks + 2; // allow held-item packet to synchronize
+                return;
+            }
+            // Vanilla interaction with a real neighboring face; no reach bypass.
+            InteractionResult result = mc.gameMode.useItemOn(
+                    mc.player, InteractionHand.MAIN_HAND, candidate.hit());
+            attemptedPositions.put(candidate.pos().asLong(), ticks + RETRY_DELAY_TICKS);
+            nextAttempt = ticks + PLACE_DELAY_TICKS;
+            if (result.consumesAction()) {
+                mc.player.swing(InteractionHand.MAIN_HAND);
+                status = "Placing: " + candidate.pos().toShortString();
             } else {
-                status = "No unfinished schematic block within 16 blocks";
+                status = "Placement refused; check support";
             }
-            nextActionTick = tickCount + 10;
             return;
         }
 
-        if (mc.player.getInventory().getSelectedSlot() != candidate.hotbarSlot()) {
-            mc.player.getInventory().setSelectedSlot(candidate.hotbarSlot());
-            status = "Auto-selected hotbar slot " + (candidate.hotbarSlot() + 1);
-            nextActionTick = tickCount + 1; // Allow the normal carried-item sync a tick.
-            return;
-        }
-
-        // Let the server decide if the placement is legal. Never modify world state locally.
-        InteractionResult result = mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, candidate.hit());
-        recentAttempts.put(candidate.target().asLong(), tickCount + RETRY_COOLDOWN_TICKS);
-        nextActionTick = tickCount + PLACEMENT_INTERVAL_TICKS;
-        if (result.consumesAction()) {
-            mc.player.swing(InteractionHand.MAIN_HAND);
-            status = "Trying " + candidate.target().toShortString() + " (server verifies)";
+        // Previously broken: picking was entirely skipped when no placement
+        // face was available. A second pass finds the closest missing item
+        // regardless of available support, then updates the selected hotbar.
+        HotbarTarget missing = findMissingItem(mc, schematic);
+        if (missing != null) {
+            int selected = mc.player.getInventory().getSelectedSlot();
+            if (selected != missing.slot()) {
+                mc.player.getInventory().setSelectedSlot(missing.slot());
+                status = "Hotbar -> slot " + (missing.slot() + 1)
+                        + " (move closer / add support)";
+            } else {
+                status = "Item ready in slot " + (selected + 1)
+                        + "; move closer / add support";
+            }
+        } else if (search.missingItems()) {
+            status = "Required blocks missing in hotbar 1-9";
+        } else if (search.hasTargets()) {
+            status = "No visible support within reach";
         } else {
-            status = "Placement rejected / needs support";
+            status = "No unfinished schematic near player";
         }
+        nextAttempt = ticks + 10;
     }
 
-    private static Candidate findNext(Minecraft mc, Level schematic) {
+    private static SearchResult findPlaceable(Minecraft mc, Level schematic) {
         Vec3 eye = mc.player.getEyePosition();
-        BlockPos base = BlockPos.containing(eye);
+        BlockPos origin = BlockPos.containing(eye);
         Candidate best = null;
-        double bestRank = Double.MAX_VALUE;
-        double reachSqr = MAX_REACH * MAX_REACH;
-        double scanSqr = buildRadius * buildRadius;
-        lastMissingHotbar = 0;
-        lastMissingSupport = 0;
-        lastSchematicTargets = 0;
-
-        for (int dy = -SCAN_RANGE; dy <= SCAN_RANGE; dy++) {
-            for (int dx = -SCAN_RANGE; dx <= SCAN_RANGE; dx++) {
-                for (int dz = -SCAN_RANGE; dz <= SCAN_RANGE; dz++) {
-                    BlockPos target = base.offset(dx, dy, dz);
-                    Vec3 center = Vec3.atCenterOf(target);
-                    double distSq = center.distanceToSqr(eye);
-                    if (distSq > scanSqr || distSq > reachSqr) continue;
-                    if (recentAttempts.containsKey(target.asLong())) continue;
-                    if (!mc.level.hasChunkAt(target) || !mc.level.getBlockState(target).isAir()) continue;
-                    if (mc.player.getBoundingBox().intersects(new AABB(target))) continue;
-
-                    BlockState desired = schematic.getBlockState(target);
+        double bestScore = Double.POSITIVE_INFINITY;
+        boolean hasTargets = false;
+        boolean missingItems = false;
+        for (int dy = -MAX_SCAN; dy <= MAX_SCAN; dy++) {
+            for (int dx = -MAX_SCAN; dx <= MAX_SCAN; dx++) {
+                for (int dz = -MAX_SCAN; dz <= MAX_SCAN; dz++) {
+                    BlockPos pos = origin.offset(dx, dy, dz);
+                    double distance = Vec3.atCenterOf(pos).distanceToSqr(eye);
+                    if (distance > radius * radius) continue;
+                    if (attemptedPositions.containsKey(pos.asLong())) continue;
+                    if (!mc.level.hasChunkAt(pos) || !mc.level.getBlockState(pos).isAir()) continue;
+                    if (mc.player.getBoundingBox().intersects(new AABB(pos))) continue;
+                    BlockState desired = schematic.getBlockState(pos);
                     if (desired.isAir()) continue;
-                    lastSchematicTargets++;
-                    // A property-bearing block (logs, stairs, slabs, etc) can still
-                    // be selected; rotation and final state need separate handling.
-                    Item wanted = desired.getBlock().asItem();
-                    int slot = hotbarSlot(mc, wanted);
-                    if (slot < 0) { lastMissingHotbar++; continue; }
-                    BlockHitResult hit = reachableSupport(mc, eye, target);
-                    if (hit == null) { lastMissingSupport++; continue; }
-
-                    double rank = target.getY() * 1000.0 + distSq;
-                    if (best == null || rank < bestRank) {
-                        bestRank = rank;
-                        best = new Candidate(target, slot, hit);
-                    }
-                }
-            }
-        }
-        return best;
-    }
-
-    /** Inventory picking independently of server placement range and support checks. */
-    private static HotbarTarget findHotbarTarget(Minecraft mc, Level schematic) {
-        Vec3 eye = mc.player.getEyePosition();
-        BlockPos base = BlockPos.containing(eye);
-        HotbarTarget best = null;
-        double bestDist = Double.MAX_VALUE;
-        int missing = lastMissingHotbar;
-        int found = lastSchematicTargets;
-        for (int dy = -ITEM_LOOKUP_RANGE; dy <= ITEM_LOOKUP_RANGE; dy++) {
-            for (int dx = -ITEM_LOOKUP_RANGE; dx <= ITEM_LOOKUP_RANGE; dx++) {
-                for (int dz = -ITEM_LOOKUP_RANGE; dz <= ITEM_LOOKUP_RANGE; dz++) {
-                    BlockPos target = base.offset(dx, dy, dz);
-                    if (!mc.level.hasChunkAt(target) || !mc.level.getBlockState(target).isAir()) continue;
-                    BlockState desired = schematic.getBlockState(target);
-                    if (desired.isAir()) continue;
-                    found++;
+                    hasTargets = true;
                     int slot = hotbarSlot(mc, desired.getBlock().asItem());
-                    if (slot < 0) { missing++; continue; }
-                    double dist = Vec3.atCenterOf(target).distanceToSqr(eye);
-                    if (best == null || dist < bestDist) {
-                        bestDist = dist;
-                        best = new HotbarTarget(target, slot);
+                    if (slot == -1) { missingItems = true; continue; }
+                    BlockHitResult face = findVisibleSupport(mc, eye, pos);
+                    if (face == null) continue;
+                    // Start at the lowest accessible layer, then nearest position.
+                    double score = pos.getY() * 1000.0 + distance;
+                    if (score < bestScore) {
+                        bestScore = score;
+                        best = new Candidate(pos, slot, face);
                     }
                 }
             }
         }
-        lastMissingHotbar = missing;
-        lastSchematicTargets = found;
+        return new SearchResult(best, hasTargets, missingItems);
+    }
+
+    private static HotbarTarget findMissingItem(Minecraft mc, Level schematic) {
+        Vec3 eye = mc.player.getEyePosition();
+        BlockPos origin = BlockPos.containing(eye);
+        HotbarTarget best = null;
+        double bestDist = Double.POSITIVE_INFINITY;
+        // Limit the secondary preview scan to a small loaded area. It has no
+        // effect on where server-side placements are allowed.
+        for (int dy = -HOTBAR_PREVIEW_RANGE; dy <= HOTBAR_PREVIEW_RANGE; dy++) {
+            for (int dx = -HOTBAR_PREVIEW_RANGE; dx <= HOTBAR_PREVIEW_RANGE; dx++) {
+                for (int dz = -HOTBAR_PREVIEW_RANGE; dz <= HOTBAR_PREVIEW_RANGE; dz++) {
+                    BlockPos pos = origin.offset(dx, dy, dz);
+                    if (!mc.level.hasChunkAt(pos) || !mc.level.getBlockState(pos).isAir()) continue;
+                    BlockState desired = schematic.getBlockState(pos);
+                    if (desired.isAir()) continue;
+                    int slot = hotbarSlot(mc, desired.getBlock().asItem());
+                    if (slot < 0) continue;
+                    double distance = Vec3.atCenterOf(pos).distanceToSqr(eye);
+                    if (distance < bestDist) {
+                        bestDist = distance;
+                        best = new HotbarTarget(slot);
+                    }
+                }
+            }
+        }
         return best;
     }
 
-    private static int hotbarSlot(Minecraft mc, Item wanted) {
+    private static int hotbarSlot(Minecraft mc, Item desired) {
         int selected = mc.player.getInventory().getSelectedSlot();
         ItemStack held = mc.player.getInventory().getItem(selected);
-        if (!held.isEmpty() && held.getItem() == wanted) return selected;
+        if (!held.isEmpty() && held.getItem() == desired) return selected;
         for (int slot = 0; slot < 9; slot++) {
             ItemStack stack = mc.player.getInventory().getItem(slot);
-            if (!stack.isEmpty() && stack.getItem() == wanted) return slot;
+            if (!stack.isEmpty() && stack.getItem() == desired) return slot;
         }
         return -1;
     }
 
-    private static BlockHitResult reachableSupport(Minecraft mc, Vec3 eye, BlockPos target) {
-        for (Direction face : new Direction[]{Direction.UP, Direction.NORTH,
+    private static BlockHitResult findVisibleSupport(Minecraft mc, Vec3 eye, BlockPos target) {
+        for (Direction side : new Direction[]{Direction.UP, Direction.NORTH,
                 Direction.SOUTH, Direction.EAST, Direction.WEST, Direction.DOWN}) {
-            BlockPos support = target.relative(face.getOpposite());
-            if (!mc.level.hasChunkAt(support)) continue;
-            BlockState supportingState = mc.level.getBlockState(support);
-            // Don't click container blocks or interactive block entities.
-            if (supportingState.isAir() || mc.level.getBlockEntity(support) != null) continue;
-
-            Vec3 click = new Vec3(target.getX() + 0.5 - 0.5 * face.getStepX(),
-                    target.getY() + 0.5 - 0.5 * face.getStepY(),
-                    target.getZ() + 0.5 - 0.5 * face.getStepZ());
-            if (eye.distanceToSqr(click) > MAX_REACH * MAX_REACH) continue;
-            Vec3 insideSupport = click.add(-face.getStepX() * 0.02,
-                    -face.getStepY() * 0.02, -face.getStepZ() * 0.02);
-            BlockHitResult visible = mc.level.clip(new ClipContext(
-                    eye, insideSupport, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, mc.player));
-            if (visible.getType() != HitResult.Type.BLOCK || !visible.getBlockPos().equals(support)
-                    || visible.getDirection() != face) continue;
-            return new BlockHitResult(click, face, support, false);
+            BlockPos neighbor = target.relative(side.getOpposite());
+            if (!mc.level.hasChunkAt(neighbor)) continue;
+            BlockState existing = mc.level.getBlockState(neighbor);
+            if (existing.isAir() || mc.level.getBlockEntity(neighbor) != null) continue;
+            Vec3 click = new Vec3(target.getX() + 0.5 - 0.5 * side.getStepX(),
+                    target.getY() + 0.5 - 0.5 * side.getStepY(),
+                    target.getZ() + 0.5 - 0.5 * side.getStepZ());
+            if (eye.distanceToSqr(click) > VANILLA_REACH * VANILLA_REACH) continue;
+            Vec3 inside = click.add(-side.getStepX() * 0.02,
+                    -side.getStepY() * 0.02, -side.getStepZ() * 0.02);
+            BlockHitResult ray = mc.level.clip(new ClipContext(
+                    eye, inside, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, mc.player));
+            if (ray.getType() != HitResult.Type.BLOCK
+                    || !ray.getBlockPos().equals(neighbor)
+                    || ray.getDirection() != side) continue;
+            return new BlockHitResult(click, side, neighbor, false);
         }
         return null;
     }
 
     private static Level schematicWorld() {
-        if (!resolved) {
-            resolved = true;
+        if (!reflected) {
+            reflected = true;
             for (String name : new String[]{
                     "fi.dy.masa.litematica.world.SchematicWorldHandler",
                     "litematica.world.SchematicWorldHandler"}) {
                 try {
-                    schematicWorldGetter = Class.forName(name).getMethod("getSchematicWorld");
+                    worldGetter = Class.forName(name).getMethod("getSchematicWorld");
+                    reflectionError = "";
                     break;
-                } catch (ReflectiveOperationException ignored) { }
+                } catch (ReflectiveOperationException e) {
+                    reflectionError = e.getClass().getSimpleName() + " for " + name;
+                }
+            }
+            if (worldGetter == null) {
+                System.err.println("[DonutVision/Printer] " + reflectionError);
             }
         }
-        if (schematicWorldGetter == null) return null;
+        if (worldGetter == null) return null;
         try {
-            Object result = schematicWorldGetter.invoke(null);
-            return result instanceof Level level ? level : null;
-        } catch (ReflectiveOperationException | RuntimeException ex) {
+            Object value = worldGetter.invoke(null);
+            if (value instanceof Level level) return level;
+            return null;
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            reflectionError = e.toString();
+            System.err.println("[DonutVision/Printer] Failed to read schematic: " + e);
             return null;
         }
     }
 
-    private record Candidate(BlockPos target, int hotbarSlot, BlockHitResult hit) { }
-    private record HotbarTarget(BlockPos target, int hotbarSlot) { }
+    private record Candidate(BlockPos pos, int hotbarSlot, BlockHitResult hit) {}
+    private record SearchResult(Candidate placeable, boolean hasTargets, boolean missingItems) {}
+    private record HotbarTarget(int slot) {}
 }
