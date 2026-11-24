@@ -1,0 +1,29 @@
+ИСПРАВЛЕНИЕ: ОБНОВЛЕНИЯ ПОПАДАЛИ НЕ В ТУ ПАПКУ
+
+У вас GitHub репозиторий DarkEntity32/DonutVision.
+Его workflow собирает НЕ корень репозитория, а папку
+DonutVision-26.1.2/ (там были mod_version=1.3.0 и старый код).
+
+Этот архив содержит ФАЙЛЫ С ПРАВИЛЬНЫМИ ПУТЯМИ ОТ КОРНЯ РЕПОЗИТОРИЯ.
+
+Замены:
+DonutVision-26.1.2/src/client/java/dev/donutvision/SchematicAssist.java
+DonutVision-26.1.2/src/client/java/dev/donutvision/DonutVisionClient.java
+DonutVision-26.1.2/src/client/java/dev/donutvision/DonutVisionScreen.java
+DonutVision-26.1.2/src/client/resources/fabric.mod.json
+DonutVision-26.1.2/gradle.properties
+.github/workflows/build.yml
+
+Как обновить через GitHub:
+1. Откройте github.com/DarkEntity32/DonutVision
+2. Code > Add file > Upload files. Перетащите распакованные папки
+   DonutVision-26.1.2 и .github (не сам ZIP) С СОХРАНЕНИЕМ СТРУКТУРЫ.
+3. Убедитесь, что файлы находятся именно по путям выше, и Commit changes.
+4. Actions > Build DonutVision v1.9.9 > Run workflow.
+5. Если GREEN, в Summary скачайте Artifacts > DonutVision-v1.9.9-JAR.
+6. Из ZIP с артефактом извлеките donutvision-26.1.2-1.9.9.jar.
+7. В Prism Launcher в папке mods уберите все старые donutvision*.jar.
+   Поместите только новую сборку.
+
+Если workflow красный, пришлите текст ошибки Compile/Verify.
+Это ИСХОДНЫЙ КОД; локальная компиляция Minecraft не выполнялась.
