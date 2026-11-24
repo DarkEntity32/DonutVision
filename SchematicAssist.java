@@ -39,6 +39,10 @@ public final class SchematicAssist {
     private static final int RETRY_COOLDOWN_TICKS = 30;
     private static final double MAX_REACH = 4.4;
     private static final int SCAN_RANGE = 5;
+    private static final int ITEM_LOOKUP_RANGE = 16; // Hotbar selection can look farther than placement range.
+    private static int lastMissingHotbar;
+    private static int lastMissingSupport;
+    private static int lastSchematicTargets;
 
     private static boolean enabled;
     private static double buildRadius = 4.25;
@@ -68,7 +72,7 @@ public final class SchematicAssist {
         enabled = value;
         nextActionTick = 0;
         recentAttempts.clear();
-        status = enabled ? "HOLD RMB to print nearby blocks" : "OFF";
+        status = enabled ? "Hold RMB: auto-select + build within reach" : "OFF";
     }
 
     /** Consumes the normal RMB use action only while our printer is armed. */
@@ -91,17 +95,17 @@ public final class SchematicAssist {
             return;
         }
         if (mc.screen != null || Freecam.active()) {
-            status = "Paused (menu / freecam)";
+            // Keep the last useful diagnostic visible when the user opens our GUI.
             return;
         }
         if (!mc.options.keyUse.isDown()) {
-            status = "Ready - hold RMB";
+            status = "Ready - hold RMB (F12 enables/disables)";
             return;
         }
         if (tickCount < nextActionTick) return;
         Level schematic = schematicWorld();
         if (schematic == null) {
-            status = "No schematic world; load a Litematica placement";
+            status = "Litematica: no active schematic placement";
             nextActionTick = tickCount + 20;
             return;
         }
@@ -113,15 +117,36 @@ public final class SchematicAssist {
 
         Candidate candidate = findNext(mc, schematic);
         if (candidate == null) {
-            status = "No reachable supported block + matching hotbar item";
+            // Fix v1.9.7: item selection must NOT require a placeable support face.
+            // Select the material for a nearby unfinished blueprint block even if
+            // the player has to move or provide a support before it can be placed.
+            HotbarTarget preview = findHotbarTarget(mc, schematic);
+            if (preview != null) {
+                int current = mc.player.getInventory().getSelectedSlot();
+                if (current != preview.hotbarSlot()) {
+                    mc.player.getInventory().setSelectedSlot(preview.hotbarSlot());
+                    status = "Auto-selected slot " + (preview.hotbarSlot() + 1)
+                            + " (move closer / add support)";
+                } else if (lastMissingSupport > 0) {
+                    status = "Selected slot " + (current + 1) + "; no reachable support";
+                } else {
+                    status = "Selected slot " + (current + 1) + "; move closer to build";
+                }
+            } else if (lastMissingHotbar > 0) {
+                status = "Missing matching hotbar block (slots 1-9)";
+            } else if (lastSchematicTargets > 0) {
+                status = "Blueprint block nearby, but not placeable here";
+            } else {
+                status = "No unfinished schematic block within 16 blocks";
+            }
             nextActionTick = tickCount + 10;
             return;
         }
 
         if (mc.player.getInventory().getSelectedSlot() != candidate.hotbarSlot()) {
             mc.player.getInventory().setSelectedSlot(candidate.hotbarSlot());
-            status = "Selected hotbar slot " + (candidate.hotbarSlot() + 1);
-            nextActionTick = tickCount + 1; // Give the normal carried-item sync a tick.
+            status = "Auto-selected hotbar slot " + (candidate.hotbarSlot() + 1);
+            nextActionTick = tickCount + 1; // Allow the normal carried-item sync a tick.
             return;
         }
 
@@ -144,6 +169,9 @@ public final class SchematicAssist {
         double bestRank = Double.MAX_VALUE;
         double reachSqr = MAX_REACH * MAX_REACH;
         double scanSqr = buildRadius * buildRadius;
+        lastMissingHotbar = 0;
+        lastMissingSupport = 0;
+        lastSchematicTargets = 0;
 
         for (int dy = -SCAN_RANGE; dy <= SCAN_RANGE; dy++) {
             for (int dx = -SCAN_RANGE; dx <= SCAN_RANGE; dx++) {
@@ -157,16 +185,16 @@ public final class SchematicAssist {
                     if (mc.player.getBoundingBox().intersects(new AABB(target))) continue;
 
                     BlockState desired = schematic.getBlockState(target);
-                    // Safely restrict auto-placement to simple non-directional blocks.
-                    if (desired.isAir() || !desired.getProperties().isEmpty()) continue;
+                    if (desired.isAir()) continue;
+                    lastSchematicTargets++;
+                    // A property-bearing block (logs, stairs, slabs, etc) can still
+                    // be selected; rotation and final state need separate handling.
                     Item wanted = desired.getBlock().asItem();
                     int slot = hotbarSlot(mc, wanted);
-                    if (slot < 0) continue;
+                    if (slot < 0) { lastMissingHotbar++; continue; }
                     BlockHitResult hit = reachableSupport(mc, eye, target);
-                    if (hit == null) continue;
+                    if (hit == null) { lastMissingSupport++; continue; }
 
-                    // Prefer lower layers, then near blocks. Lower layers are useful as
-                    // real supports for later overhanging blocks in the air.
                     double rank = target.getY() * 1000.0 + distSq;
                     if (best == null || rank < bestRank) {
                         bestRank = rank;
@@ -175,6 +203,37 @@ public final class SchematicAssist {
                 }
             }
         }
+        return best;
+    }
+
+    /** Inventory picking independently of server placement range and support checks. */
+    private static HotbarTarget findHotbarTarget(Minecraft mc, Level schematic) {
+        Vec3 eye = mc.player.getEyePosition();
+        BlockPos base = BlockPos.containing(eye);
+        HotbarTarget best = null;
+        double bestDist = Double.MAX_VALUE;
+        int missing = lastMissingHotbar;
+        int found = lastSchematicTargets;
+        for (int dy = -ITEM_LOOKUP_RANGE; dy <= ITEM_LOOKUP_RANGE; dy++) {
+            for (int dx = -ITEM_LOOKUP_RANGE; dx <= ITEM_LOOKUP_RANGE; dx++) {
+                for (int dz = -ITEM_LOOKUP_RANGE; dz <= ITEM_LOOKUP_RANGE; dz++) {
+                    BlockPos target = base.offset(dx, dy, dz);
+                    if (!mc.level.hasChunkAt(target) || !mc.level.getBlockState(target).isAir()) continue;
+                    BlockState desired = schematic.getBlockState(target);
+                    if (desired.isAir()) continue;
+                    found++;
+                    int slot = hotbarSlot(mc, desired.getBlock().asItem());
+                    if (slot < 0) { missing++; continue; }
+                    double dist = Vec3.atCenterOf(target).distanceToSqr(eye);
+                    if (best == null || dist < bestDist) {
+                        bestDist = dist;
+                        best = new HotbarTarget(target, slot);
+                    }
+                }
+            }
+        }
+        lastMissingHotbar = missing;
+        lastSchematicTargets = found;
         return best;
     }
 
@@ -235,4 +294,5 @@ public final class SchematicAssist {
     }
 
     private record Candidate(BlockPos target, int hotbarSlot, BlockHitResult hit) { }
+    private record HotbarTarget(BlockPos target, int hotbarSlot) { }
 }

@@ -250,7 +250,7 @@ public final class DonutVisionScreen extends Screen {
         g.fill(left + 16, top + 1, left + 21, top + 52, 0x55FF8A25);
         g.text(font, "DONUT", left + 30, top + 18, TEXT, true);
         g.text(font, "VISION", left + 66, top + 18, ORANGE_BRIGHT, true);
-        g.text(font, "v1.9.7  //  RSHIFT + F10", left + panelWidth - 167, top + 18, DIM, false);
+        g.text(font, "v1.9.8  //  RSHIFT + F10", left + panelWidth - 167, top + 18, DIM, false);
 
         double pulse = (Math.sin(now / 1_000_000_000.0 * 2.5) + 1.0) / 2.0;
         int pulseW = 18 + (int)(pulse * 18);
@@ -330,7 +330,7 @@ public final class DonutVisionScreen extends Screen {
         } else if (page == Page.MODULES) {
             int y = top + 485;
             rounded(g, left + 17, y, panelWidth - 42, 49, 5, CARD);
-            g.text(font, "LIVE BLOCK ESP STATUS", left + 28, y + 11, DIM, false);
+            g.text(font, SchematicAssist.enabled() ? "SCHEMATIC PRINTER STATUS" : "LIVE BLOCK ESP STATUS", left + 28, y + 11, DIM, false);
             g.text(font, SchematicAssist.enabled() ? SchematicAssist.status() : BlockEsp.statusLabel(), left + 28, y + 29, ORANGE_BRIGHT, false);
         } else if (page == Page.SETTINGS) {
             int y = top + 600;

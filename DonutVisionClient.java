@@ -103,7 +103,7 @@ public final class DonutVisionClient implements ClientModInitializer {
         schematicKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.donutvision.schematic_assist", InputConstants.Type.KEYSYM, InputConstants.KEY_F12, category));
 
-        System.out.println("[DonutVision] 1.9.7 client initializer loaded. Menu keys: Right Shift or F10.");
+        System.out.println("[DonutVision] 1.9.8 client initializer loaded. Menu keys: Right Shift or F10.");
         ClientSettings.load();
         EspOverlay.install();
         BaseFinderHud.install();
@@ -129,7 +129,7 @@ public final class DonutVisionClient implements ClientModInitializer {
         }
         if (!welcomeShown) {
             welcomeShown = true;
-            notify(mc, "v1.9.7 loaded! Hold RMB to print in reach. F12 toggles (Litematica).");
+            notify(mc, "v1.9.8 loaded! Auto hotbar fix; build within reach. F12 toggles (Litematica).");
         }
         while (freecamKey.consumeClick()) {
             Freecam.toggle(mc);
